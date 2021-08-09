@@ -9,12 +9,15 @@ googledrive::drive_auth(email = "quipu.dat@gmail.com")
 ```
 
 ## Soja
-```{r}
-soja_raw <- read_excel("data/2017-2021_cba_soja.xlsx", skip = 0)
-save(soja_raw, file= "data/2017-2021_cba_soja.RData")
-#sheet <- gs4_get(gs4_find("2017-2021_cba_soja")$id)
-#soja_raw %>% write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "raw")
 
+```{r}
+sheet_2017_2021_cba_soja <- gs4_get(gs4_find("2017-2021_cba_soja")$id)
+
+raw <- read_sheet(sheet_2017_2021_cba_soja, 
+                  sheet = "raw", guess_max = 10000, skip=1) %>% 
+  janitor::clean_names() #%>% 
+
+raw %>% glimpse
 ```
 
 ```{r}
