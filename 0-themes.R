@@ -138,6 +138,16 @@ theme_juan <- function (base_size = base_size, legen_pos = legen_pos) {
       # legend
       legend.position=legen_pos,
       panel.spacing = unit(1,"lines")
-    )   
+    )  
 }
+
+#---- Theme maps ----
+theme_map <- theme_bw()+
+  theme(
+    panel.grid.major = 
+      element_line(color = gray(0.5), 
+                   linetype = "dashed", size = 0.05), 
+    panel.background = element_rect(fill = "aliceblue"),
+    axis.text.x =  element_text(size = 6),
+    axis.text.y = element_text(size = 6))
 

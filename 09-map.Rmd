@@ -1,0 +1,117 @@
+---
+output:
+  html_document:
+    code_folding: hide
+    chunk_output_type: console
+---
+
+# Zonas de análisis
+
+```{r, eval=FALSE}
+pacman::p_load(tidyverse, sf)
+
+```
+
+          
+```{r, eval=FALSE}
+#provincias argentinas
+ARG <- raster::getData(name = "GADM", country = "ARG", level = 0) %>% 
+  st_as_sf() 
+
+#municipios de Buenos Aires
+BSAS <- raster::getData(name = "GADM", country = "ARG", level = 2) %>% 
+  st_as_sf() %>% 
+  filter(NAME_1 == "Buenos Aires") 
+
+unique(BSAS$NAME_2)
+
+pacman::p_load(tidyverse, sf, tidygeocoder)
+
+geo <- dat %>% 
+  select(zona_0, localidad) %>% 
+  mutate(punto = paste0("AR, Buenos Aires, ", localidad)) %>% 
+  mutate(geo(address = punto, method = "arcgis"))
+
+geo_n <- geo %>% 
+  group_by(zona_0, localidad) %>%
+  summarise(n= n(), 
+            lat=first(lat), 
+            long=first(long))
+geo_n
+```
+
+```{r}
+ls()
+dat %>% glimpse
+dat %>% distinct(localidad) %>% pull()
+```
+
+```{r, eval=FALSE}
+# crear zonzas a partir de municipios que se incluyen  
+
+BSAS %>% 
+  filter(NAME_2 %in% c("Balcarce", "Benito Juárez", "Lobería",  "Tandil", "Azul","Adolfo Gonzales Chaves", "Ayacucho")) %>% 
+  # mutate(Zona = case_when(
+  # str_detect(NAME_2, "AZUL") ~ "Azul",
+  # str_detect(NAME_2, "Madariaga|Maipú|Chiquita|Ayacucho") ~ "Madariaga",
+  # str_detect(NAME_2, "Balcarce|Lober") ~ "Sierra",
+  # str_detect(NAME_2, "Pueyrre|Alvarado") ~ "Costa")) %>%
+  # drop_na(Zona) %>%
+  mutate(id = gsub("[^A-Z]+", "", .$NAME_2)) -> tandilia
+
+# dat %>%
+#   count(zona_0, localidad) %>%
+#   left_join(puntos_geo) %>%
+#   group_by(ciudad) %>%
+#   slice(1)
+# alu_n
+
+tandilia <- cbind(tandilia, st_coordinates(st_centroid(tandilia$geometry))) %>%
+  mutate(has = st_area(geometry)/10000)
+```
+
+```{r, eval=FALSE}
+# tandilia %>% 
+#   group_by(NAM) %>% 
+#   summarise(has = sum(has))
+```
+
+```{r, eval=FALSE}
+pacman::p_load(ggsflabel)
+
+ARG %>% 
+  ggplot()+
+  geom_sf()+
+  geom_sf(data = BSAS, fill = "gray98", color= "gray60", size =0.2) +
+  geom_sf(data = tandilia, color = gray(.1), size = 0.2) +
+  coord_sf(xlim = c(-62,-56.5), ylim = c(-39, -36), expand = FALSE, 
+           label_axes = waiver())+
+  geom_text(data = tandilia, aes(x = X, y = Y,  label = id), 
+            size = 3, hjust = 0.5, fontface = "bold")+
+  geom_point(data = geo_n %>% drop_na(zona_0),
+             aes(x = long, y = lat, size =n, col=zona_0),
+             alpha=.8) +
+  geom_text(data=geo_n, aes(x=long, y=lat, label = n), vjust=-.1)+
+  labs(x = "", y = "", col = "Zonas", size= "n lotes", 
+       caption = "Esquema de distribución de lotes reportados (no representan ubicación precisas de los lotes)")+
+  theme_map
+
+
+ggsave(last_plot(), file = "plots_superficies/mapa.png", w=6, h=6)
+drive_upload("plots_superficies/mapa.png", 
+             path = as_dribble("juanchi_guille/tandilia_fina_2020/superficies"),
+             overwrite = TRUE)
+
+```
+![zonas](plots_superficies/mapa.png)
+# Map
+
+```{r message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+pacman::p_load(tidyverse, googlesheets4, googledrive)
+# drive_auth(email = "edwardsmolina@gmail.com")
+# gs4_auth(email = "edwardsmolina@gmail.com")
+source(here::here("0 themes.R"))
+load(here::here("data/data.Rdata"))
+# glimpse(dat)
+```
