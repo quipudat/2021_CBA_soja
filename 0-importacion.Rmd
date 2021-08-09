@@ -1,0 +1,172 @@
+# Importacion {#import}
+
+
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+pacman::p_load(tidyverse, googlesheets4, googledrive, lubridate)
+gs4_auth(email = "edwardsmolina@gmail.com")
+googledrive::drive_auth(email = "edwardsmolina@gmail.com")
+```
+
+## Soja
+```{r}
+soja_raw <- read_excel("data/2021_JMF_soja.xlsx", skip = 4)
+save(soja_raw, file= "data/2021_JMF_soja.RData")
+sheet_2021_JMF_soja <- gs4_get(gs4_find("2021_JMF_soja")$id)
+soja_raw %>% write_sheet(ss=sheet_2021_JMF_soja, sheet = "raw")
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+tan <- gs4_get(gs4_find("Tandilia_fina_2020")$id)
+# tan %>% sheet_names()
+# gs4_browse(tan)
+# load(here::here("data/data.Rdata"))
+
+
+```
+
+
+```{r eval = F}
+raw <- read_sheet(tan, sheet = "raw", guess_max = 10000, skip=1) %>% 
+  janitor::clean_names() #%>% 
+  # mutate_if(is.character, as.factor) %>% 
+  # mutate(fsiembra = lubridate::ymd(fsiembra)) 
+# glimpse(raw)
+
+fos <- read_sheet(tan, sheet = "fosforo", 
+                  guess_max = 10000, skip=0) %>% 
+  janitor::clean_names()
+```
+
+
+```{r, eval=FALSE}
+raw %>% glimpse()
+raw %>% 
+  mutate(across(c("localidad", "variedad", "cultivo_de_cosecha","antecesor_estival","fungicida1", "fungicida2", 
+                  "enfermedad_1", "enfermedad_2"), 
+                #sacar acentos
+                ~stringi::stri_trans_general(
+                #pasar a mayusculas y sacar puntos
+                str_to_upper(gsub(',', '\\.', 
+                # sacar espacios antes-desp
+                str_trim(
+                  str_replace_all(., fixed(" "), "_")
+                ))), "Latin-ASCII"))) %>% 
+  # mutate(Zona = case_when(
+  #   str_detect(zona_0, "Madariaga|Maipú") ~ "Madariaga", 
+  #   str_detect(zona_0, "Balcarce") ~ "Sierra", 
+  #   TRUE ~ "Costa"
+  # )) %>%  
+  #  mutate(
+  #   year = factor(lubridate::year(fecha_de_siembra_dia_mes)),     
+  #   date = update(fecha_de_siembra_dia_mes, year = 1), 
+  #   temprano_tardio= case_when(
+  #   date<as.Date("0001-07-15") ~ "Temprano", 
+  #   date>as.Date("0001-07-15") ~ "Tardio")) %>% 
+  # rowwise() %>%
+  # mutate(dano_tot = sum(dano_1,dano_2, na.rm = T)) %>% 
+ mutate_at(vars(
+   localidad, variedad,calidad_del_lote, cultivo_de_cosecha, antecesor_estival,fungicida1, fungicida2, enfermedad_1, enfermedad_2), as.factor) %>% 
+  ungroup-> dat  
+
+glimpse(dat)
+# raw %>% 
+#   slice(292:295) %>% 
+#   select(contains("dano"))
+# save(raw,dat, file = "data/data.Rdata")
+```
+
+
+```{r eval = F}
+save(raw, fos, dat, file = "data/data.Rdata")
+```
+
+```{r eval = F}
+all_images <- list.files(path = here::here("plots"), 
+                         pattern = ".png", 
+                         all.files = TRUE, full.names = TRUE)
+all_images %>% 
+  map(~ drive_upload(.,
+                     path = as_dribble("juanchi_guille/JMF_fina_2020"),
+                     overwrite = TRUE)
+  )
+```
+
+```{r}
+pacman::p_load(tidyverse, lubridate, zoo)
+
+serie_tandil0 <- read_table2(
+  "~/Documents/00_data_analysis/datasets/meteo_tandil/tandil.dat", 
+  col_names = FALSE) %>% 
+  rename(year=X1, julian=X2, tmax=X3, tmin=X4, rain=X5, hr=X6)   
+
+serie_tandil <- transform(serie_tandil0, 
+                          date = as.Date(paste0(year, "-1-1")) + julian - 1)   
+serie_tandil <- serie_tandil%>% 
+  mutate(month=lubridate::month(as.Date(date))) %>% 
+  select(year, month, julian, date, everything())
+
+serie_tandil %>% glimpse
+
+tandil_2020_21 <- readxl::read_excel("~/Documents/00_data_analysis/datasets/meteo_tandil/TANDIL 2020 21.xlsx") %>% rename(date=Fecha, tmax="T.Max.", tmin="T.Min.", rain=Pp, hr=Humedad)   %>%
+  mutate(date=dmy(date),
+         year=year(date),
+         month=month(date),
+         julian=yday(date))
+
+tandil_2020_21 %>% write_sheet(ss=tan, sheet = "weather")
+
+tan20 <- read_sheet(tan, sheet = "weather") 
+tan20$date <- as.Date(tan20$date, format =  "%Y-%m-%d")
+tan20 %>% glimpse
+
+# tandil_2020_21 %>% 
+#   filter(year == 2021)
+
+tandil_serie_71_21 <- serie_tandil %>% 
+  filter(!year == 2021) %>% 
+  filter(!year == 2020) %>% 
+  bind_rows(tan20)  
+
+# tandil_serie_71_21 %>% distinct(year) %>% pull()
+# tandil_serie_71_21 %>% count(year)
+
+serie_full <- tandil_serie_71_21 %>%  
+  # mutate_at(vars(date), as.Date(date)) %>%
+  mutate(tmin=replace(tmin, tmin<(-10), NA)) %>% 
+  mutate(tmin = zoo::na.approx(tmin)) %>% 
+  mutate(tmax=replace(tmax, tmax>40, NA)) %>% 
+  mutate(tmax=replace(tmax, tmax<0, NA)) %>% 
+  mutate(tmax = zoo::na.approx(tmax)) %>% 
+  mutate(rain=replace(rain, rain<0, 0)) %>% 
+  mutate(hr=replace(hr, hr<30, NA)) %>% 
+  mutate(hr = zoo::na.approx(hr)) %>% 
+  arrange(date)  
+
+serie_full %>% glimpse
+save(serie_full, file ="data/serie_tandil.RData" )
+load("data/serie_tandil.RData" )
+
+# serie_full%>%
+# ggplot()+
+#   aes(date, hr)+
+#   geom_line()+
+#   # geom_col()+
+#   facet_wrap(~year, scales = "free")+
+#   theme_void()+
+#   geom_hline(yintercept = 0)
+  
+
+# serie_full %>% write_csv("data/tandil_serie71-20.csv")
+
+# Serie climatica tandil 
+# dat <- read.csv("https://raw.githubusercontent.com/juanchiem/agro_data/master/tandil_serie71-20.csv", sep = ",")
+# dat$date <- as.Date(dat$date, format =  "%Y-%m-%d")
+# dat %>% glimpse
+
+
+```
+

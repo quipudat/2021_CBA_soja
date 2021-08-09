@@ -1,0 +1,424 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+# Protección
+
+```{r message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+pacman::p_load(tidyverse, googlesheets4, googledrive)
+# drive_auth(email = "edwardsmolina@gmail.com")
+# gs4_auth(email = "edwardsmolina@gmail.com")
+source(here::here("0 themes.R"))
+load(here::here("data/data.Rdata"))
+# glimpse(dat)
+n_fun <- function(x){
+  return(data.frame(y = -Inf, label = paste0("n = ",length(x))))
+}
+```
+
+```{r eval FALSE}
+list.files(path = here::here("plots_proteccion"), 
+           pattern = ".png", 
+           all.files = TRUE, full.names = TRUE) %>%   
+  map(~ drive_upload(., path = as_dribble("juanchi_guille/tandilia_fina_2020/proteccion"),
+                     overwrite = TRUE)
+      )
+```
+
+
+```{r}
+fungi_url = "https://docs.google.com/spreadsheets/d/1cTzo36jHRULfBf8c83TDpauxiwHrxeKrGprUUxLRzm0/edit?usp=sharing"
+gs4_get(fungi_url) %>% 
+  read_sheet(sheet = "fungi") -> dfungi  
+
+dfungi %>% 
+  distinct(producto, .keep_all = TRUE)  %>% 
+  mutate(across(contains("c."), ~.x/0.1*dosis)) %>% 
+  arrange(producto) -> dfungi
+head(dfungi)
+```
+
+```{r}
+dat %>%   
+  select(cultivo_de_cosecha, contains("fungicida")) %>% 
+  filter(str_detect(cultivo_de_cosecha, 'TRIGO|CEB')) %>%
+  filter(!str_detect(cultivo_de_cosecha, 'Candeal')) %>%
+  rowwise() %>% 
+  mutate(aplicaciones = sum(!is.na(fungicida1), !is.na(fungicida2))) %>% 
+  ungroup() %>% 
+  count(cultivo_de_cosecha, aplicaciones) %>% 
+  arrange(cultivo_de_cosecha, aplicaciones, -n) %>% 
+  group_by(cultivo_de_cosecha) %>%
+  mutate(porcent = round((n/sum(n))*100), 
+         aplica_f = factor(aplicaciones, 
+                               levels = 0:2)) -> dat_fungi
+
+head(dat_fungi)
+```
+
+Cuantas aplicaciones se llevan los cultivos?
+
+```{r}
+dat_fungi %>%
+  # filter(!campana == "17-18") %>% 
+  group_by(cultivo_de_cosecha)%>%
+  summarise(media = weighted.mean(aplicaciones, n),
+            aplica_f=NA) -> n_fungi
+head(n_fungi)
+```
+
+```{r}
+dat_fungi %>% 
+ # %>% str
+  # filter(!campana =="17-18") %>% 
+  filter(cultivo_de_cosecha =="TRIGO") %>% 
+  ggplot(aes(x = aplica_f, y = porcent,  
+             #fill =, 
+             label = round(porcent))) +
+  # facet_grid(. ~ campana)+
+  geom_col(position = position_stack(), color = "black", alpha= 0.5) +
+  geom_text(position = position_stack(vjust = .5), fontface = "bold", size=3) +
+  labs(title = "Trigo" ,
+       fill = "Nro de aplicaciones", 
+       x = "", y = "% lotes aplicados")+
+  geom_text(data = n_fungi %>% 
+                filter(cultivo_de_cosecha =="TRIGO"), 
+            aes(y=-10, 
+                label = round(media,1)), 
+            angle = 0) +
+  # scale_y_continuous(expand = expand_scale(add = c(13,3)))+
+  theme(axis.text.x=element_blank())+
+  # coord_flip()+
+  # scale_fill_manual(values = c("0"= "green3", "1"="steelblue", "2" ="red3"))+
+  theme_bw2
+```
+
+
+```{r}
+ ggsave(last_plot(), 
+        file = "plots_proteccion/fungicidas_aplicaciones_trigo.png", width = 7, height = 3)
+```
+
+
+```{r}
+```
+
+Para el cultivo de trigo, se observa que: 
+
+- la región Sierra fue la más estable en las 3 campañas, con 1.3-1.5 aplicaciones (o sea, mitad de los lotes se aplican 1 y mitad 2)
+
+- Madariaga varía más que las restantes, con una tendencia a disminuir en el periodo estudiado. 
+
+- la Costa osciló entre 1.2-1,7, con un 50-50% la última campaña.
+
+```{r}
+dat_fungi %>% 
+  filter(cultivo_de_cosecha =="CEBADA") %>% 
+  ggplot(aes(x = aplica_f, y = porcent, 
+             label = round(porcent))) +
+  # facet_grid(. ~ campana)+
+  geom_col(position = position_stack(), color = "black", alpha= 0.5) +
+  geom_text(position = position_stack(vjust = .5), fontface = "bold", size=3) +
+  labs(title = "Cebada" ,
+       fill = "Nro de aplicaciones", 
+       x = "", y = "% lotes aplicados")+
+  geom_text(data = n_fungi %>% 
+                filter(cultivo_de_cosecha =="CEBADA"), 
+            aes(y=-10, 
+                label = round(media,1)), 
+            angle = 0) +
+  # scale_y_continuous(expand = expand_scale(add = c(13,3)))+
+  theme(axis.text.x=element_blank())+
+  # coord_flip()+
+  # scale_fill_manual(values = c("0"= "green3", "1"="steelblue", "2" ="red3"))+
+  theme_bw2
+```
+
+
+```{r}
+ggsave(last_plot(), 
+       file = "plots_proteccion/fungicidas_aplicaciones_cebada.png", width = 7, height = 3)
+```
+
+
+```{r}
+```
+
+Para el caso de cebada se observa una reducción generalizada en las 3 zonas (más lotes con aplicación), con mayor numero de aplicaciones medio en Madariaga. Esto podria deberse a la menor presión de ramularia de la ultimas 2 campañas. 
+
+## Lotes aplicados en 2020
+
+Seleccionaremos todas las variables relacionadas con la protección foliar, para profundizar el análisis en la última campaña. 
+
+```{r}
+dat %>% 
+  # filter(campana == "20-21") %>% 
+  filter(fungicida == "Si") %>% 
+  filter(str_detect(cultivo_de_cosecha, 'TRIGO|CEB')) %>%
+  # filter(!str_detect(cultivo_de_cosecha, 'Candeal')) %>%
+  select(cultivo_de_cosecha, zona_0, campo, variedad, fungicida:enfermedad_2, rinde) %>% 
+  rowwise() %>%
+  mutate(aplicaciones = sum(!is.na(fungicida1),!is.na(fungicida2), na.rm = T)) -> df20
+
+view(df20)
+```
+
+Los que aplican 1 solo fungi: en que estadio lo hacen?
+
+```{r}
+library(webr)
+```
+
+
+```{r}
+df20 %>% 
+  count(cultivo_de_cosecha, aplicaciones, producto= fungicida1) %>% 
+  arrange(-n) %>% 
+  left_join(select(dfungi, producto, activos, grupos),  by = "producto") %>%
+  drop_na(producto) %>%
+  mutate(mezcla = case_when(
+    activos == 2 ~ "Doble", 
+    activos == 3 ~ "Triple"), 
+    mezcla = fct_rev(mezcla)) %>% 
+   arrange(cultivo_de_cosecha, aplicaciones, producto) %>% 
+    group_by(cultivo_de_cosecha, aplicaciones, producto) %>%
+    slice(1)-> df20_fungi1
+head(df20_fungi1)
+```
+
+Observemos como fueron los casos con una aplicación simple:
+
+```{r}
+df20_fungi1 %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>% 
+  filter(aplicaciones ==1) %>%
+  PieDonut(aes(pies=mezcla, donuts=producto, count =n))
+```
+
+
+```{r}
+ggsave(file = "plots_proteccion/aplic_simple_tr.png", width = 6, height = 6)
+```
+
+66% de las aplicaciones simples fueron realizadas con mezclas triples
+
+```{r}
+dfungi %>% 
+  filter(producto %in% c("MIRAVIS_TRIPLE", "ORQUESTA_ULTRA", "TRIDIUM") ) %>% 
+  select(producto, grupos, contains("_"))
+```
+
+34% con mezclas dobles: 
+
+```{r}
+dfungi %>% 
+  filter(producto %in% c("CRIPTON", "ELATUS", "OPERA") ) %>% 
+  select(producto, grupos, contains("_"))
+```
+
+```{r}
+df20_fungi1 %>% 
+  filter(cultivo_de_cosecha == "CEBADA") %>% 
+  filter(aplicaciones ==1) %>%
+  PieDonut(aes(pies=mezcla, donuts=producto, count =n))
+```
+
+
+```{r}
+ggsave(file = "plots_proteccion/aplic_simple_ceb.png", width = 6, height = 6)
+```
+
+Que concentración de triazoles tienen los productos? 
+
+```{r}
+dfungi %>% 
+  filter(DMI_1 %in% c("Cyproconazole","Epoxiconazole", "Prothioconazole")) %>% 
+  ggplot()+
+  aes(x=producto, y = c.DMI1)+
+  facet_wrap("DMI_1", scales = "free_x") +  
+  geom_bar(stat='identity', width=.5)  +
+  labs(x="", y="ml")+
+  # coord_flip()+
+  theme_dens1
+```
+
+```{r}
+ggsave(file = "plots_proteccion/concentracion_triazol.png", width = 6, height = 6)
+```
+
+Aplicaciones dobles
+
+```{r}
+df20_fungi1 %>% 
+  filter(aplicaciones ==2) %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>% 
+  PieDonut(aes(pies=mezcla, donuts=producto, count =n), 
+           labelposition=1, r0=0.2,r1=0.8,r2=1.4)
+```
+
+
+```{r}
+ggsave(file = "plots_proteccion/aplic_doble_trigo_fungi1.png", width = 6, height = 6)
+```
+
+
+```{r}
+df20_fungi1 %>% 
+  filter(aplicaciones ==2) %>%
+  filter(cultivo_de_cosecha == "CEBADA") %>% 
+  PieDonut(aes(pies=mezcla, donuts=producto, count =n), 
+  labelposition=0, r0=0.2,r1=0.8,r2=1.4)
+```
+
+```{r}
+ggsave(file = "plots_proteccion/aplic_doble_cebada_fungi1.png", width = 6, height = 6)
+```
+
+
+La primer aplicacion fue realizada con mezcla doble en 89% de los casos en trigo y 71% en cebada  
+
+```{r}
+# Seleccionamos el 2° fungicida aplicado
+
+df20 %>% 
+  filter(aplicaciones ==2) %>% 
+  count(cultivo_de_cosecha, producto= fungicida2) %>% 
+  arrange(-n) %>% 
+  left_join(select(dfungi, producto, activos, grupos),  by = "producto") %>%
+  drop_na(producto) %>%
+  mutate(mezcla = case_when(
+    activos == 2 ~ "Doble", 
+    activos == 3 ~ "Triple"), 
+    mezcla = fct_rev(mezcla))  %>% 
+   arrange(cultivo_de_cosecha, producto) %>% 
+    group_by(cultivo_de_cosecha, producto) %>%
+    slice(1)-> df20_fungi2
+```
+
+Segundas intervenciones 
+
+```{r}
+df20_fungi2 %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>%
+  PieDonut(aes(pies=mezcla, donuts=producto, count =n), 
+           labelposition=0, r0=0.2,r1=0.8,r2=1.4)
+```
+
+```{r}
+ggsave(file = "plots_proteccion/aplic_doble_trigo_fungi2.png", width = 6, height = 6)
+```
+
+```{r}
+df20_fungi2 %>% 
+  filter(cultivo_de_cosecha == "CEBADA") %>% 
+  PieDonut(aes(pies=mezcla, donuts=producto, count =n), 
+  labelposition=0, r0=0.2,r1=0.8,r2=1.4) 
+```
+
+```{r}
+ggsave(file = "plots_proteccion/aplic_doble_cebada_fungi2.png", width = 6, height = 6)
+```
+
+se revierte la seleccion a mezcla triple en 59%  en trigo y 100% en Cebada  (Miravis Triple y Orquesta Ultra predominantemente) 
+
+
+Cuanto fue la respuesta en rendimiento segun la enfermedad temprana para 1 o 2 aplicaciones de fungicidas?
+
+```{r}
+df20  %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>%
+  filter(zona_0 == "Serrana") %>%
+  mutate_at(vars(enfermedad_1), as.character) %>% 
+    mutate(enf = if_else(str_detect(enfermedad_1, "MANCHA"), "MANCHAS", enfermedad_1)) %>% 
+      mutate(enf = if_else(str_detect(enf, "ROYA_AMARILLA"), "ROYA_AMARILLA", enf)) %>% 
+     drop_na(enf) %>%
+  rename(producto = fungicida1) %>% 
+  left_join(select(dfungi, producto, activos, grupos),  by = "producto") %>%
+  drop_na(enf) %>%
+  mutate(mezcla = case_when(
+    activos == 2 ~ "Doble", 
+    activos == 3 ~ "Triple"), 
+    mezcla = mezcla) %>% 
+  ggplot()+
+  facet_wrap("enf", scales = "free_y")+
+  aes(x = factor(aplicaciones), y=rinde)+
+  geom_point(alpha=0.3)+
+  stat_summary(fun.data = "mean_cl_boot", colour = "red", size = 0.5)+
+  stat_summary(aes(label=round(..y..,0)), 
+               fun=mean, geom="text", size=4,vjust = -0.5)+
+  stat_summary(fun.data = n_fun, geom = "text", vjust = -0.5)+
+  labs(x = "Nro de aplicaciones", y = "kg/ha", title = "Trigo/2020")+
+  theme_bw2
+```
+
+```{r}
+ggsave(file = "plots_proteccion/trigo_1aplica_vs_2aplica.png", width = 6, height = 6)
+```
+
+```{r}
+df20  %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>%
+  filter(zona_0 == "Serrana") %>%
+  mutate_at(vars(enfermedad_1), as.character) %>% 
+    mutate(enf = if_else(str_detect(enfermedad_1, "MANCHA"), "MANCHAS", enfermedad_1)) %>% 
+      mutate(enf = if_else(str_detect(enf, "ROYA_AMARILLA"), "ROYA_AMARILLA", enf)) %>% 
+     drop_na(enf) %>%
+  filter(aplicaciones == 1) %>% 
+  drop_na(enfermedad_1) %>%
+  rename(producto = fungicida1) %>% 
+  left_join(select(dfungi, producto, activos, grupos),  by = "producto") %>%
+  drop_na(producto) %>%
+  mutate(mezcla = case_when(
+    activos == 2 ~ "Doble", 
+    activos == 3 ~ "Triple"), 
+    mezcla = mezcla) %>% 
+  ggplot()+
+  facet_grid(enf ~ ., scales = "free_y")+
+  aes(x = factor(mezcla), y=rinde)+
+  geom_point(alpha=0.3)+
+  stat_summary(fun.data = "mean_cl_boot", colour = "red", size = 0.5)+
+  stat_summary(aes(label=round(..y..,0)), 
+               fun=mean, geom="text", size=4,vjust = -0.5)+
+  stat_summary(fun.data = n_fun, geom = "text", vjust = -0.5)+
+  labs(x = "Tipo de mezcla", y = "kg/ha", title = "Trigo/2020 - aplicación simple")+
+  theme_bw2
+```
+
+```{r}
+ggsave(file = "plots_proteccion/trigo_1aplica_mezcla_doble_vs_triple.png", width = 6, height = 6)
+```
+> Puede que haya ruido (efectos confundidos)? Usemos solo los baguette (buen comportamiento a royas en general):
+
+```{r}
+df20 %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>% 
+  filter(str_detect(variedad, "BAGUETTE")) %>%
+  count(variedad) %>% arrange(-n)
+
+df20 %>% 
+  mutate_at(vars(enfermedad_1), as.character) %>% 
+  mutate(enf = if_else(str_detect(enfermedad_1, "MANCHA"), "MANCHAS", enfermedad_1)) %>% 
+  mutate(enf = if_else(str_detect(enf, "ROYA_AMARILLA"), "ROYA_AMARILLA", enf)) %>% 
+  drop_na(enf) %>%
+  filter(zona_0 == "Serrana") %>%
+  filter(cultivo_de_cosecha == "TRIGO") %>% 
+  filter(str_detect(variedad, "BAGUETTE")) %>%
+  ggplot()+
+  aes(x = factor(aplicaciones), y=rinde)+
+  geom_point(aes(col=variedad), alpha=0.3)+
+  stat_summary(fun.data = "mean_cl_boot", colour = "red", size = 0.5)+
+  facet_grid(. ~ enf, scales = "free_y")+
+  stat_summary(aes(label=round(..y..,0)), 
+               fun=mean, geom="text", size=4, vjust = -0.5)+
+  stat_summary(fun.data = n_fun, geom = "text", vjust = -0.5)+
+  labs(x = "Nro de aplicaciones", y = "kg/ha", 
+       title = "Trigo/2020 - Enfermedad 1 - Baguette's")+
+  theme_bw2
+```
+
+```{r}
+ggsave(file = "plots_proteccion/baguettes_1aplica_vs_2aplica.png", width = 6, height = 6)
+```
+

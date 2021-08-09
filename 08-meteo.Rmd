@@ -1,0 +1,570 @@
+# Condiciones meteorológicas 
+
+## Precipitaciones 
+
+```{r, eval=FALSE}
+pacman::p_load(tidyverse, lubridate, googledrive)
+load("data/serie_tandil.RData")
+source(here::here('0 themes.R'))
+```
+
+```{r eval=F}
+list.files(path = here::here("plots_meteo"), 
+           pattern = ".png",
+           all.files = TRUE, full.names = TRUE)%>% 
+  map(~ drive_upload(.,
+                     path = as_dribble("juanchi_guille/tandilia_fina_2020/meteo"),
+                     overwrite = TRUE)
+  )
+```
+
+- Cálculos Serie
+
+```{r, eval=FALSE}
+serie20 <- tandil_serie %>% 
+  filter(year<2020) %>%
+  filter(year>2000) %>%
+  group_by(date=if_else(day(date) >= 30,
+                        floor_date(date, "20 days"),
+                        floor_date(date, "10 days"))) %>%
+  summarize(rain_acum = sum(rain),
+            days = n()) %>%
+  mutate(year = year(date),
+         month = month(date)) %>%
+  ungroup %>%
+  group_by(year) %>%
+  mutate(decada = row_number()) %>%
+  ungroup %>%
+  group_by(decada) %>%
+  summarise(month = first(month),
+            med = quantile(rain_acum, .5, na.rm = T),
+            lower_80=quantile(rain_acum, .2, na.rm = T), # Rango 80% de los años
+            upper_80=quantile(rain_acum, .8, na.rm = T)) 
+serie20
+```
+
+- Cálculos reciente campaña
+
+```{r, eval=FALSE}
+c2020 <-
+  tandil_serie %>%
+  group_by(date = if_else(day(date) >= 30,
+                          floor_date(date, "20 days"),
+                          floor_date(date, "10 days"))) %>%
+  summarize(rain_acum_season = sum(rain)) %>% #, days=n()) %>%
+  mutate(year = year(date),
+         month = month(date)) %>%
+  group_by(year) %>%
+  mutate(decada = row_number()) %>%
+  filter(date > '2020-01-21', date < '2020-12-22') %>% 
+  left_join(serie20, by = c("decada")) %>%
+  mutate(date = as.Date(date))
+```
+
+- Balance relativo a la serie
+
+```{r, eval=FALSE}
+bal <- c2020 %>% 
+    group_by(month.y) %>% 
+    summarise( 
+      date = first(date),
+      cs = sum(rain_acum_season) %>% round,
+      cs_med = sum(med)%>% round, 
+      bal = cs - cs_med%>% round) %>% 
+  mutate(lab = paste0(cs, " (",bal,")"))
+bal
+```
+
+- Gráfico de precipitaciones
+
+```{r, eval=FALSE}
+c2020 %>%
+  ggplot(aes(x=date)) +
+  geom_pointrange(aes(y=med, ymin=lower_80, ymax=upper_80), 
+                  fill='white', color='deepskyblue',
+                  shape=21, fatten=.7, size=3, position=(p5=position_nudge(x = 5)))+
+  geom_point(aes(y=rain_acum_season), col ="brown1",
+             position=p5) +
+  geom_line(aes(y=rain_acum_season, group=1), col ="brown1", linetype="dashed", position=p5)+
+  scale_y_continuous(limits=c(0, 100), expand=c(0.05, 0))+
+  scale_x_date(date_breaks="1 month", date_labels="%b", expand=expansion(0,0), 
+               limits = as.Date(c('2020-05-01','2020-12-31')))+    
+  labs(x=NULL, y="ml",
+       # title = "Precipitaciones en Balcarce (decádicas)",
+       subtitle = "- Campaña 2020 (en puntos rojos)\n- Serie 2000-2019: mediana (puntos blancos) y rango 80% (barras azules)",
+       caption = "Datos de la estación meteorológica del SMN Tandil AERO\nEn itálicas: mm acumulados mensual 2020 y diferencia con la serie 2000-19 (entre paréntesis)")+
+  geom_text(data = bal, aes(x = as.Date(date), y=100, label = lab), 
+            vjust = 2, hjust = -.5, fontface = "italic", size=3)+
+  theme_dens
+
+ggsave(last_plot(),
+       file = "plots_weather/lluvias.png", 
+       w=80, h=50, units="mm", dpi=300, scale=2)
+```
+
+![](plots/lluvias.png)
+
+> agosto, septiembre noviembre y diciembre llovio menos que lo normal 2020-2019
+
+```{r}
+library(scales)
+
+tandil_serie%>% 
+  filter(year<2021) %>% 
+  mutate(trimestre = factor(quarter(date))) %>% 
+  group_by(year, trimestre) %>% 
+  summarise(cum_rain=sum(rain)) %>% 
+  ggplot()+
+  aes(x=year, y=cum_rain, fill=trimestre)+
+  geom_bar(position=position_stack(reverse = TRUE), 
+           stat="identity" 
+           )+ 
+  # geom_line(stat = "summary", fun=mean, col="red3",
+  #           aes(y=rollmean(cum_rain, 5,  align = "right", fill = NA))) +
+  labs(x="",y="mm acumulados", 
+       title =  "Evolución lluvias acumuladas en Tandil", 
+       subtitle = "Acumulada anual (línea negra), media movil ultimos 5 años (línea roja)",
+       caption = "Datos de la estación meteorológica del SMN Tandil AERO", 
+       fill= "Trimestre")+
+  scale_x_continuous(breaks = seq(1970, 2020, by=1))+
+  theme_dens1
+
+ggsave(last_plot(),
+       file = "plots_weather/evol_lluvias_anual.png", 
+       w=80, h=50, units="mm", dpi=300, scale=2)
+```
+
+
+```{r}
+keyval <- data.frame(month = c(3:12,1:2), 
+      season = rep(c("oto", "inv", "prim", "ver"), each = 3),
+      stringsAsFactors = FALSE)
+
+left_join(serie, keyval) %>% 
+  filter(year<2020) %>% 
+  group_by(year, season) %>% 
+  summarise(cum_rain=sum(rain)) %>% 
+  mutate(season=fct_relevel(season, "oto", "inv", "prim", "ver")) %>% 
+  ggplot()+
+  aes(x=year, y=cum_rain)+
+  geom_line()+
+  geom_smooth()+
+  facet_grid(.~season)+
+  labs(x="",y="mm acumulados", 
+       caption = "Datos de la estación meteorológica del SMN Tandil AERO")+
+  theme_dens1
+
+ggsave(last_plot(),
+       file = "plots_weather/evol_lluvias_season.png", 
+       w=80, h=50, units="mm", dpi=300, scale=2)
+```
+
+```{r}
+rain20 <- left_join(serie, keyval) %>% 
+  filter(year==2020) %>% 
+  group_by(year, season) %>% 
+  summarise(cum_rain=sum(rain), .groups="drop") %>% 
+  ungroup()
+rain20
+
+dens_p <- left_join(serie, keyval) %>% 
+  filter(year<2020) %>% 
+  group_by(year, season) %>% 
+  summarise(cum_rain=sum(rain), .groups="drop") %>% 
+  ungroup() %>% 
+  mutate(season=fct_relevel(season, "oto", "inv", "prim", "ver")) %>% 
+  ggplot()+
+  aes(x = cum_rain, y = season, fill = 0.5 - abs(0.5 - stat(ecdf))) +
+  stat_density_ridges(geom = "density_ridges_gradient", calc_ecdf = TRUE) +
+  scale_fill_viridis_c(name = "Tail probability", direction = -1, guide = FALSE)+
+  labs(y="",x="mm acumulados", 
+       caption = "Datos de la estación meteorológica del SMN Tandil AERO")+
+  geom_vline(data = rain20, aes(xintercept = cum_rain), color = "red") +
+  # geom_text(data = rain20, aes(x = cum_rain), color = "red") +
+  #  geom_density_ridges(data = rain20, aes(x=cum_rain),
+  #   jittered_points = TRUE,
+  #   position = position_points_jitter(width = 0.05, height = 0),
+  #   point_shape = '|', point_size = 3, point_alpha = 1, alpha = 0.7,
+  # )+
+  theme_bw()
+dens_p  
+
+ggsave(last_plot(),
+       file = "plots_weather/evol_lluvias_season.png", 
+       w=80, h=50, units="mm", dpi=300, scale=2)
+```
+
+```{r}
+rain20 <- left_join(serie, keyval) %>% 
+  filter(year==2020) %>% 
+  group_by(year, month) %>% 
+  summarise(cum_rain=sum(rain), .groups="drop") %>% 
+  ungroup()
+rain20
+
+left_join(serie, keyval) %>% 
+  filter(year<2020) %>% 
+  group_by(year, month) %>% 
+  summarise(cum_rain=sum(rain), .groups="drop") %>% 
+  ungroup() %>% 
+  ggplot(aes(x = cum_rain, fill = month)) +
+  geom_density(alpha = 0.5) +
+  guides(fill = FALSE) +
+  facet_wrap(vars(month))+
+  geom_vline(data=rain20, aes(xintercept=cum_rain), col="red3")+
+  theme_bw()+
+  labs(x="mm aacum", y ="")+
+  scale_y_continuous(labels = NULL, breaks = NULL) 
+
+ggsave(last_plot(),
+       file = "plots_weather/lluvias_mes.png", 
+       w=80, h=50, units="mm", dpi=300, scale=2)
+
+```
+
+
+## Temperaturas
+
+- Serie
+
+```{r}
+pacman::p_load(tidyverse, lubridate, zoo)
+
+stations <- tibble::tribble(
+              ~station,   ~lat,   ~lon,
+       "Balcarce INTA", -37.75,  -58.3,
+  "Mar del Plata AERO", -37.93, -57.58,
+           "Azul AERO", -36.83, -59.88,
+  "Benito Juarez AERO", -37.72, -59.78,
+             "Laprida", -37.57, -60.77,
+         "Barrow INTA", -38.32, -60.25,
+         "TANDIL AERO", -37.23, -59.25
+  ) %>% arrange(station)
+
+dates <- seq.Date(lubridate::dmy("1-1-2000"), lubridate::dmy("30-12-2020"), by = "1 day")
+temp <- metR::GetSMNData(dates, type = "daily", bar = TRUE)
+
+
+tandil <- rad %>% 
+  rename(date = YYYYMMDD, rad = ALLSKY_SFC_SW_DWN) %>% 
+  left_join(temp %>% 
+              filter(station == "TANDIL AERO") %>% 
+              mutate(date = as.Date(date))) %>% 
+  # mutate(rfa = rad*0.5, 
+  #       q = rfa/((tmax + tmin)/2)) %>% 
+  select(date, tmin, tmax, rad) 
+
+tandil %>% tail
+
+tandil %>% 
+  ggplot(aes(
+    # date, 
+    seq(1, length(rad)),
+    rad))+ 
+  geom_line()+ geom_rug(sides="b") -> p1
+p1
+```
+
+```{r}
+serie_tandil0 <- read_table2("~/Documents/00_data_analysis/datasets/meteo_tandil/tandil.dat", 
+                            col_names = FALSE)
+serie_tandil <- serie_tandil0 %>% 
+  rename(year=X1, julian=X2, tmax=X3, tmin=X4, rain=X5, hr=X6)   
+
+serie_tandil <- transform(serie_tandil, date = as.Date(paste0(year, "-1-1")) + julian - 1)  
+
+serie_tandil <- serie_tandil %>% 
+  mutate(month=lubridate::month(as.Date(date)))
+
+serie_tandil %>% 
+  filter(year == 2020)
+
+# library(readxl)
+# tandil_2020_21 <- read_excel("~/Documents/00_data_analysis/datasets/meteo_tandil/TANDIL 2020 21.xlsx") %>% rename(date=Fecha, tmax="T.Max.", tmin="T.Min.", rain=Pp, hr=Humedad)   %>% 
+#     mutate(date=dmy(date), 
+#            year=year(date),
+#            month=month(date),
+#            julian=yday(date))
+# tandil_2020_21 %>% write_sheet(ss=tan, sheet = "weather")
+
+tan20 <- read_sheet(tan, sheet = "weather") 
+
+# tandil_2020_21 %>% 
+#   filter(year == 2021)
+
+tandil_serie_71_21 <- tandil_serie_71_21 %>% 
+    filter(!year == 2021) %>% 
+    filter(!year == 2020) %>% 
+  bind_rows(tan20)
+
+save(tandil_serie_71_21, file ="data/serie_tandil.RData")
+load("data/serie_tandil.RData")
+```
+
+
+
+```{r, eval=FALSE}
+# tandil_serie_71_21 %>% distinct(year) %>% pull()
+
+serie_full <- tandil_serie_71_21 %>% 
+  mutate(tmin=replace(tmin, tmin<(-10), NA)) %>% 
+  mutate(tmin = zoo::na.approx(tmin)) %>% 
+  mutate(tmax=replace(tmax, tmax>40, NA)) %>% 
+  mutate(tmax = zoo::na.approx(tmax)) 
+  
+# serie %>%   
+#   ggplot()+
+#   aes(date, tmin)+
+#   geom_line()+
+#   facet_wrap(~year, scales = "free")+
+#   theme_void()
+
+skimr::skim(serie_full)
+# serie %>% 
+#   ggplot()+
+#   aes(date, tmin)+
+#   geom_line()+
+#   facet_wrap(~year, scales = "free")+
+#   theme_void()+
+#   geom_hline(yintercept = 30)
+
+load("data/serie_tandil.RData" )
+
+serie_tan <- serie_full %>% 
+  mutate(tmean=(tmin+tmax)/2) %>% 
+  filter(year<2020) %>%
+  filter(year>1999) %>%
+  group_by(julian) %>%
+  summarise(
+    month = first(month),
+    avg = mean(tmean, .2, na.rm = T),
+    # Rango 80% de los años (rango interno)
+    lower_80=quantile(tmean, .2, na.rm = T),
+    upper_80=quantile(tmean, .8, na.rm = T),
+    # Min y max de tmean (rango externo)
+    lower_tmean=min(tmean, na.rm = T),
+    upper_tmean=max(tmean, na.rm = T)) %>%
+  ungroup()
+
+skimr::skim(serie_tan)
+```
+
+- Campaña reciente
+
+```{r, eval=FALSE}
+camp <- # Fusionar serie con campaña 18/19
+  serie_full %>%
+  # filter(julian==335) %>%  #skimr::skim() 
+  filter(year==2020) %>%  #skimr::skim() 
+  # mutate(tmin = zoo::na.approx(tmax)) %>%
+  # mutate(tmin = zoo::na.approx(tmin)) %>% 
+  left_join(serie_tan, by = c("julian"),
+            suffix = c("_20", "_serie")) %>% #skimr::skim()
+  mutate(date = as.Date(date),
+         tmean=(tmin+tmax)/2) %>%
+  droplevels()
+camp
+skimr::skim(camp)
+
+````
+
+- Balance campaña - serie
+
+```{r, eval=FALSE}
+tan_t <- camp %>% 
+  group_by(month_20) %>% 
+  summarize(date = first(date),
+            n_days = n(),
+            d_frios = sum(tmean < avg),
+            p_frios = paste0(round(d_frios/n_days*100),"%"),
+            d_calidos = sum(tmean  > avg),
+            p_calidos = paste0(round(d_calidos/n_days*100), "%"),
+            )
+tan_t
+```
+
+- Grafico Temp
+
+```{r, eval=FALSE}
+camp %>% 
+  ggplot(aes(date)) +  
+  geom_ribbon(aes(ymin = tmean, ymax = pmin(tmean, avg), fill = "+cálido"),alpha=0.5 ) +
+  geom_ribbon(aes(ymin = avg, ymax = pmin(tmean, avg), fill = "+frío"), alpha=0.5) +
+  geom_line(aes(date, avg, linetype = "Serie 2000-2019")) +
+  geom_line(aes(date, tmean, linetype = "campaña 2020")) +
+  scale_fill_brewer(palette = "Set1", direction = 1)+
+  # scale_x_date(date_breaks="1 month", date_labels="%b", expand=expansion(0.01,0))+
+  scale_x_date(date_breaks="1 month", date_labels="%b", expand=expansion(0,0) 
+               # limits = as.Date(c('2020-05-01','2020-12-31'))
+               )+    
+  # geom_text(data = feno, aes(x = as.Date(date), y=0, label = DDA), 
+  #           angle = 90, hjust = 0, fontface = "bold", size=3)+
+  # geom_rug(data = feno, aes(x = as.Date(date)))+
+  geom_text(data = tan_t, aes(x = as.Date(date), y=Inf, label = p_calidos),
+            col = "red3", vjust = 2, hjust = 1.5, fontface = "italic", size=3)+
+  geom_text(data = tan_t, aes(x = as.Date(date), y=-Inf, label = p_frios), 
+            col ="steelblue", vjust = -3, hjust = 1.5, fontface = "italic", size=3)+  
+  labs(fill="", linetype="", x ="", y ="T°", title = "", 
+       caption = "Datos de la estación meteorológica del SMN Tandil Aeroclub\n*Proporción de días mas calidos/frios que la media de la serie por mes (en colores)")+
+       # \niii)*Fecha de antesis")+
+  # annotate('text', x = as.Date("2020-11-18"), y = 8, label='"*"', parse=FALSE, size = 7) +
+ theme_dens
+
+ggsave(file = "plots_weather/temp1.png", w=70, h=50, units="mm", dpi=300, scale=2)
+```
+
+
+```{r}
+library(zoo)
+```
+
+
+```{r}
+serie_full %>% 
+  filter(year<2021) %>% 
+  mutate(tmean=(tmin+tmax)/2) %>% 
+  pivot_longer(cols = starts_with("t"),
+               names_to = "type", 
+               values_to = "temp") %>% 
+  ggplot()+
+  aes(x=year, y=temp)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_smooth()+
+  facet_grid(type~., scales = "free")+
+  labs(title = "Evolución temperaturas en Tandil ", 
+       x="", y="ºC",
+       caption = "Datos del SMN - TANDIL AERO")+
+  theme_dens1
+
+ggsave(file = "plots_weather/temp1.png", w=70, h=50, units="mm", dpi=300, scale=2)
+```
+
+
+
+```{r}
+serie_full %>% 
+  filter(year<2021) %>% 
+  group_by(year) %>% 
+  summarise(n_heladas=sum(tmin<0)) %>% 
+  ggplot()+
+  aes(x=year, y=n_heladas)+
+  geom_point()+
+  geom_smooth()+
+  labs(title="Cantidad de heladas/año (tmin<0)")
+ggsave(file = "plots_weather/heladas.png", w=70, h=50, units="mm", dpi=300, scale=2)
+
+```
+
+
+```{r}
+library(ggridges)
+
+(serie_full %>% 
+  filter(year<2021) %>% 
+  filter(year>2000) %>% 
+  filter(month==11) %>% 
+  mutate(tmean=(tmin+tmax)/2)) %>% 
+ggplot() +
+  aes(x = tmean, y = factor(year), fill = stat(x))+
+  geom_density_ridges_gradient( scale = 3, rel_min_height = 0.01, gradient_lwd = 1.) +
+  # scale_x_continuous(expand = c(0, 0)) +
+  scale_y_discrete(expand = expansion(mult = c(0.01, 0.25))) +
+  scale_fill_viridis_c(name = "Temp. [F]", option = "C") +
+  labs(
+    title = 'Temperatures in Lincoln NE',
+    subtitle = 'Mean temperatures (Fahrenheit) by month for 2016'
+  ) +
+  theme_ridges(font_size = 13, grid = TRUE) + 
+  theme(axis.title.y = element_blank())
+
+
+(serie_full %>% 
+  filter(year<2021) %>% 
+  filter(year>2000) %>% 
+  filter(month==11) %>% 
+  mutate(tmean=(tmin+tmax)/2)) %>% 
+ggplot()+
+  aes(x=julian, y=tmin, col=factor(year))+
+  geom_line(stat = "summary", fun=mean, 
+            aes(y=rollmean(tmin, 5,  align = "right", fill = NA))) +
+ 
+  labs(title = "Evolución temperaturas en Tandil ", 
+       x="", y="ºC",
+       caption = "Datos del SMN - TANDIL AERO")+
+  theme_dens1
+
+
+serie_full %>% 
+  filter(year<2021) %>% 
+  mutate(tmean=(tmin+tmax)/2) %>% 
+  pivot_longer(cols = starts_with("t"),
+               names_to = "type", 
+               values_to = "temp") %>% 
+  ggplot()+
+  aes(x=year, y=temp)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_smooth()+
+  facet_grid(type~., scales = "free")+
+  labs(title = "Evolución temperaturas en Tandil ", 
+       x="", y="ºC",
+       caption = "Datos del SMN - TANDIL AERO")+
+  theme_dens1
+
+serie_full %>% 
+  filter(year<2021) %>% 
+  mutate(tmean=(tmin+tmax)/2) %>% 
+  pivot_longer(cols = starts_with("t"),
+               names_to = "type", 
+               values_to = "temp") %>% 
+  ggplot()+
+  aes(x=year, y=temp, col=type)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_smooth()+
+  # facet_grid(type~., scales = "free")+
+  labs(title = "Evolución temperaturas en Tandil ", 
+       x="", y="ºC",
+       caption = "Datos del SMN - TANDIL AERO")+
+  theme_dens1
+
+
+pmax <- serie_full %>% 
+  # group_by(year, month) %>% 
+  # summarise(tmean) %>% 
+  filter(year<2021) %>% 
+  ggplot()+
+  aes(x=year, y=tmax)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_line(stat = "summary", fun=mean, 
+            aes(y=rollmean(tmax, 1825,  align = "right", fill = NA)), col="red3") +
+  # geom_smooth()+
+  labs(title = "T máxima", y="ºC")
+
+pmax
+
+pmean <- serie_full %>% 
+  # group_by(year, month) %>% 
+  # summarise(tmean) %>% 
+  filter(year<2021) %>% 
+  ggplot()+
+  aes(x=year, y=(tmin+tmax)/2)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_smooth()+
+  labs(title = "T media", y="ºC")
+  
+pmin <- serie_full %>% 
+  # group_by(year, month) %>% 
+  # summarise(tmean) %>% 
+  filter(year<2021) %>% 
+  ggplot()+
+  aes(x=year, y=tmin)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_smooth()+
+  labs(title = "T mínima", y="ºC")
+
+library(patchwork)
+pmax / pmean / pmin
+```
+
+
+
+![](plots/temp.png)

@@ -1,0 +1,227 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Rendimientos
+
+```{r message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+pacman::p_load(tidyverse, googlesheets4, googledrive)
+# drive_auth(email = "edwardsmolina@gmail.com")
+# gs4_auth(email = "edwardsmolina@gmail.com")
+source(here::here("0 themes.R"))
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+load(here::here("data/data.Rdata"))
+# glimpse(dat)
+```
+
+```{r}
+list.files(path = here::here("plots_rinde"), 
+           pattern = ".png",
+           all.files = TRUE, full.names = TRUE)%>% 
+  map(~ drive_upload(.,
+                     path = as_dribble("juanchi_guille/tandilia_fina_2020/rinde"),
+                     overwrite = TRUE)
+  )
+```
+
+
+```{r cantidad de lote}
+dat %>% 
+   drop_na(rinde) %>% 
+   drop_na(zona_0) %>%      
+   group_by(campana, zona_0, cultivo_de_cosecha) %>% 
+   summarise(n_lotes = n(), 
+             rinde_med = quantile(rinde, 0.5), 
+             techo = quantile(rinde, 0.95)) -> lotes
+
+dat %>% 
+  drop_na(rinde) %>%   
+   drop_na(zona_0) %>%      
+  group_by(zona_0, cultivo_de_cosecha) %>% 
+  summarise(rinde_med = quantile(rinde, 0.5)) -> lotes_sum
+lotes_sum
+```
+
+## Rindes observados 
+
+```{r rindes_hist_tr}
+(dat %>% 
+   drop_na(rinde) %>% 
+   filter(cultivo_de_cosecha == "TRIGO") %>% 
+   filter(between(rinde, 1000, 10000)) %>% 
+   drop_na(zona_0) )%>% 
+   ggplot(aes(rinde))+
+   geom_histogram(fill = "steelblue")+
+   facet_grid(factor(zona_0) ~ .)+
+   labs(y = "Cantidad de lotes", x = "kg/ha", 
+        title ="Trigo" , fill = "")+
+   # scale_y_continuous(breaks= scales::pretty_breaks())+
+   geom_vline(data=filter(lotes, 
+                          cultivo_de_cosecha == "TRIGO"), aes(xintercept=rinde_med), col = "red")+
+   geom_text(data=filter(lotes, cultivo_de_cosecha == "TRIGO"), 
+             aes(x=rinde_med, y=Inf, label=round(rinde_med,0)), 
+             vjust=1.5,col = "red")+
+   # geom_vline(data=filter(lotes, cultivo_de_cosecha == "Trigo"), aes(xintercept=techo), col = "red")+
+   guides(fill = "none")+
+   theme_aapre
+```
+
+
+```{r rindes_hist_tr}
+ggsave(last_plot(), file = "plots_rinde/rindes_hist_tr.png", width = 5, height = 4)
+```
+
+
+```{r rindes_hist_ceb}
+(dat %>% 
+   drop_na(rinde) %>% 
+   filter(cultivo_de_cosecha == "CEBADA") %>% 
+   filter(between(rinde, 1000, 10000)) %>% 
+   ggplot(aes(rinde))+
+   geom_histogram(fill = "steelblue")+
+   facet_grid(zona_0~.)+
+   labs(y = "Cantidad de lotes", x = "kg/ha", 
+        title ="Cebada")+
+   geom_vline(data=filter(lotes, cultivo_de_cosecha == "CEBADA"), aes(xintercept=rinde_med), col = "red")+
+   geom_text(data=filter(lotes, cultivo_de_cosecha == "CEBADA"), 
+             aes(x=rinde_med, y=Inf, label=round(rinde_med,0)), 
+             vjust=1.5,col = "red")+
+   scale_y_continuous(breaks= scales::pretty_breaks())+
+   theme_aapre)
+```
+
+
+```{r rindes_hist_ceb}
+last_plot() %>% 
+ggsave(file = "plots_rinde/rindes_hist_ceb.png", width = 5, height = 4)
+```
+
+## Brechas
+
+```{r}
+potencial <- 
+  dat %>% #select(dano_1, dano_2)
+  # mutate_if(is.character, as.factor) %>%
+   drop_na(zona_0) %>% 
+   drop_na(rinde) %>% 
+rowwise()%>%
+  mutate(dano_tot= sum(dano_1,dano_2, na.rm=TRUE)) %>% #distinct(cultivo_de_cosecha)
+  filter(cultivo_de_cosecha %in% c("TRIGO", "CEBADA")) %>% # distinct(rinde) 
+  filter(
+     # dano_tot < 10, 
+         rinde > 1000) %>%  #distinct(dano_tot) 
+         # riego == "NO") %>% 
+  group_by(zona_0, 
+           # campana,
+           cultivo_de_cosecha) %>%
+  summarise(.groups = 'drop',
+    lotes = n(), 
+    rinde_50 = quantile(rinde, 0.5, na.rm = TRUE),
+    rinde_90 = quantile(rinde, 0.90, na.rm = TRUE),
+    rinde_95 = quantile(rinde, 0.95, na.rm = TRUE),  
+    dif = round((rinde_95-rinde_50)/rinde_95*100,1),
+    label = paste(round(dif, 0), "%", sep=""),
+    n_lotes = paste("(", round(lotes, 1), ")", sep="")) %>%
+  complete(zona_0, nesting(cultivo_de_cosecha))
+
+potencial %>% 
+    write_sheet(ss=tan, sheet = "potencial")
+# potencial%>% view
+```
+
+```{r potencial_tr_ceb.png}
+ggplot(potencial) +
+  # facet_wrap("campana")+
+  geom_bar(aes(x=zona_0, y=rinde_90, fill = cultivo_de_cosecha),            position=position_dodge(width=0.9), 
+           stat="identity",
+           alpha=0.5)+
+  
+  geom_text(aes(zona_0, rinde_90, fill = cultivo_de_cosecha, 
+                label=round(rinde_90,0)), 
+            stat="identity",
+            position=position_dodge(width=0.9),
+            vjust = 0, hjust=0.5, size = 3)+   
+  
+  geom_bar(aes(x=zona_0, y=rinde_50, fill = cultivo_de_cosecha),
+           position=position_dodge(width=0.9), 
+           stat="identity")+
+  geom_text(aes(zona_0, rinde_50, fill = cultivo_de_cosecha, 
+                label=round(rinde_50,0)), position=position_dodge(width=0.9),
+            vjust = 1, hjust=0.5, size = 3)+
+  labs(x = "", 
+       y = "kg/ha",
+       title = "Rendimientos 50° y 90°", 
+       fill = "", 
+       caption = 
+         "- Barras: 50° y 90° percentil\n
+        - Excuidos: daño por adversidades > 10%, rinde < 1000 kg/ha"  
+        )+
+  scale_y_continuous(breaks= scales::pretty_breaks(),
+                     expand = c(0.2, 0))+
+  theme_bw2
+```
+
+
+```{r potencial_tr_ceb.png}
+ggsave(last_plot(), file = "plots_rinde/potencial_tr_ceb.png", w=7, h=6)
+```
+
+
+```{r potencial_tr_ceb.png}
+```
+
+```{r}
+potencial %>% 
+  filter(cultivo_de_cosecha == "TRIGO") %>% 
+ggplot() +
+  # facet_wrap("campana")+
+  geom_bar(aes(x=zona_0, y=rinde_95),
+           # position=position_dodge(width=0.9), 
+           stat="identity",
+           fill = alpha("#ff1212", 0.5))+
+  geom_text(aes(zona_0, rinde_95, 
+                # fill = cultivo_de_cosecha, 
+                label=round(rinde_95,0)), 
+                       stat="identity",
+            # position=position_dodge(width=0.9),
+            vjust = 0, hjust=0.5, size = 3)+   
+  geom_bar(aes(x=zona_0, y=rinde_50),
+           # position=position_dodge(width=0.9), 
+           stat="identity",
+           fill = alpha("#1212ff", 0.5)
+           )+
+  geom_text(aes(zona_0, rinde_50,
+                # fill = cultivo_de_cosecha, 
+                label=round(rinde_50,0)), 
+            # position=position_dodge(width=0.9),
+            vjust = 1, hjust=0.5, size = 3)+
+  geom_text(aes(zona_0, y=((rinde_95-rinde_50)/2)+rinde_50,
+                # fill = cultivo_de_cosecha,
+                label=label),
+            # position=position_dodge(width=0.9),
+            vjust = .5, hjust=0.5, size = 3, fontface="bold")+
+  geom_text(aes(zona_0, y=-Inf,
+                # fill = cultivo_de_cosecha,
+                label=n_lotes),
+            # position=position_dodge(width=0.9),
+            vjust = -2, hjust=0.5, size = 3, fontface="bold")+
+  labs(x = "", 
+       y = "kg/ha",
+       title = "Potencial de rendimiento - Trigo", 
+       # fill = "", 
+       caption = 
+       "- Barras: percentiles 95° (rosa) y 50° (violeta)\n- Excluidos: daño por adversidades > 10%, rinde < 1000 kg/ha\n- Numero de lotes entre paréntesis" 
+       )+
+  theme_dens1
+```
+
+
+```{r}
+ggsave(last_plot(), file = "plots_rinde/potencial_trigo.png", w=5, h=6)
+```
+
