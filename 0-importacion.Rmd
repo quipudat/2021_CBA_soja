@@ -4,41 +4,22 @@
 ```{r message=FALSE, warning=FALSE, eval=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 pacman::p_load(tidyverse, googlesheets4, googledrive, lubridate)
-gs4_auth(email = "edwardsmolina@gmail.com")
-googledrive::drive_auth(email = "edwardsmolina@gmail.com")
+gs4_auth(email = "quipu.dat@gmail.com")
+googledrive::drive_auth(email = "quipu.dat@gmail.com")
 ```
 
 ## Soja
 ```{r}
-soja_raw <- read_excel("data/2021_JMF_soja.xlsx", skip = 4)
-save(soja_raw, file= "data/2021_JMF_soja.RData")
-sheet_2021_JMF_soja <- gs4_get(gs4_find("2021_JMF_soja")$id)
-soja_raw %>% write_sheet(ss=sheet_2021_JMF_soja, sheet = "raw")
+soja_raw <- read_excel("data/2017-2021_cba_soja.xlsx", skip = 0)
+save(soja_raw, file= "data/2017-2021_cba_soja.RData")
+#sheet <- gs4_get(gs4_find("2017-2021_cba_soja")$id)
+#soja_raw %>% write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "raw")
 
 ```
 
-
-
-```{r message=FALSE, warning=FALSE, eval=FALSE}
-tan <- gs4_get(gs4_find("Tandilia_fina_2020")$id)
-# tan %>% sheet_names()
-# gs4_browse(tan)
-# load(here::here("data/data.Rdata"))
-
-
-```
-
-
-```{r eval = F}
-raw <- read_sheet(tan, sheet = "raw", guess_max = 10000, skip=1) %>% 
+```{r}
+raw <- soja_raw %>%
   janitor::clean_names() #%>% 
-  # mutate_if(is.character, as.factor) %>% 
-  # mutate(fsiembra = lubridate::ymd(fsiembra)) 
-# glimpse(raw)
-
-fos <- read_sheet(tan, sheet = "fosforo", 
-                  guess_max = 10000, skip=0) %>% 
-  janitor::clean_names()
 ```
 
 
