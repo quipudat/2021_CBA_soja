@@ -129,21 +129,22 @@ load(here::here("data/data.Rdata"))
 ## Superficie por zona / localidad
 
 ```{r}
-(dat %>% 
-  group_by(zona_0, localidad) %>% 
-  summarise(super = round(sum(superficie, na.rm = TRUE)/1000,1),
+#raw %>%  mutate_at(raw$regional,as.factor)
+(raw %>% 
+  group_by(zona, regional) %>% 
+  summarise(super = round(sum(superficie_ha, na.rm = TRUE)/1000,1),
             .groups='drop') %>% 
   ungroup() %>% 
-  drop_na(zona_0)) %>% 
+  drop_na(zona)) %>% 
   ggplot(aes(
-    x = zona_0,
+    x = zona,
     # x = reorder(zona_0, super, sum),
     y = super, 
-    fill = localidad)) + 
+    fill = regional)) + 
   geom_bar(
     # aes(fill=super),
     stat = "identity", color = gray(.5)) +
-  geom_text(aes(label = paste0(localidad, "~", round(super,1))), 
+  geom_text(aes(label = paste0(regional, "~", round(super,1))), 
             position = position_stack(vjust = 0.5),
             col = "white", fontface = "bold", size = 3)+
   scale_fill_viridis_d(begin = 0.3, end =1, direction = -1, guide=F)+
@@ -161,6 +162,46 @@ drive_upload(
   "plots_superficies/sup_zona.png", 
   overwrite = TRUE)
 ```
+
+## Superficie por camapana / regional y Zona
+
+```{r}
+raw %>% 
+  group_by(campana, zona, regional) %>% 
+  # filter(is.na(rinde))
+  summarise(super = round(sum(superficie_ha)/1000,0)) %>% 
+  ungroup() %>% 
+  # tally() %>% 
+  mutate(campana = factor(campana),
+         campana = forcats::fct_rev(campana),
+         zona = factor(zona),
+         regional = factor(regional)) %>% 
+  # data.frame 
+  drop_na(regional) %>% 
+  ggplot(aes(
+    x =reorder(regional, super, sum),
+    y = super, fill = campana)) + 
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = super), fontface = "bold", position = position_stack(vjust = 0.5), 
+            size = 2)+
+  facet_grid(zona ~ .,  scales="free", space = "free")+
+  coord_flip()+
+  labs(x = "", y = "Superficie (miles de ha)", fill = "", 
+       title =  "Distribución de superficie según zona, regional y campaña\n")+
+  geom_text(
+    aes(x = reorder(regional, super, sum),
+        label = stat(y), group = regional),
+    stat = 'summary', fun = sum, 
+    vjust = 0.5, hjust=-.1, size = 3)+ 
+   theme_bw(base_size = 12) %+replace% 
+  theme(plot.title = element_text(hjust = 1.5, vjust = 1))
+```
+```{r}
+ggsave(last_plot(), 
+       file = "plots/sup_cam_zona_reg.png", 
+       width = 7, height = 4)
+```
+
 
 ## Superficie de cultivos / zona
 

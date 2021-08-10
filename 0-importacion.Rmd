@@ -1,3 +1,8 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
 # Importacion {#import}
 
 
@@ -20,10 +25,6 @@ raw <- read_sheet(sheet_2017_2021_cba_soja,
 raw %>% glimpse
 ```
 
-```{r}
-raw <- soja_raw %>%
-  janitor::clean_names() #%>% 
-```
 
 
 ```{r, eval=FALSE}
