@@ -4,6 +4,132 @@ editor_options:
   chunk_output_type: console
 ---
 
+# Rindes por campaña y zona
+
+SOJA DE PRIMERA
+```{r}
+raw %>% filter(#dano_tot ==0,
+         #fecha_de_siembra_dd_mm  > '2018-09-15', 
+         #fecha_de_siembra_dd_mm  < '2018-12-29',
+         rendimiento_qq_ha>4,
+         soja_1_2 == "Soja 1°") %>% 
+  select(campana, zona, rendimiento_qq_ha) %>% 
+  # rename(`Rinde (qq/ha)` = rinde, `Superficie (ha)` = superficie) %>% 
+  # pivot_longer(-campana, -zona) %>% 
+  group_by(campana, zona) %>% 
+  summarise(rinde_top20 = quantile(rendimiento_qq_ha, 0.8)) -> top20
+
+raw %>% filter(#dano_tot ==0,
+         #fecha_de_siembra_dd_mm > '2018-09-15', 
+         #fecha_de_siembra_dd_mm < '2018-12-29',
+         rendimiento_qq_ha>4,
+         soja_1_2 == "Soja 1°") %>% 
+  left_join(top20, by = c("campana", "zona")) %>% 
+  mutate(top20 = if_else(rendimiento_qq_ha >= rinde_top20, "si", "no")) -> soja1_80
+  
+```
+
+
+```{r}
+soja1_80 %>% 
+  select(campana, zona, rendimiento_qq_ha) %>% 
+  group_by(campana, zona) %>% 
+  summarise(rinde = round(median(rendimiento_qq_ha, na.rm = T),0)) -> mu
+
+soja1_80 %>%
+  ggplot(aes(rendimiento_qq_ha))+
+  geom_histogram(fill = "steelblue")+
+  # geom_histogram(aes(fill = top20))+
+  facet_grid(campana~zona, scales = "free_y")+
+  geom_vline(data=mu, aes(xintercept=rinde), linetype="dashed", col = "red")+
+  labs(x = "Rendimiento (qq/ha)", y = "Nro. de lotes", 
+       title = "Distribución de rindes de soja 1° x campaña / zona", 
+       subtitle = 'Linea roja indica 50%')+ 
+  theme_aapre
+```
+
+
+```{r}
+
+ggsave(last_plot(), 
+       file = "plots/rend_cam_zon_soj1.png", 
+       width = 7, height = 4)
+
+```
+
+
+
+SOJA DE SEGUNDA
+```{r}
+raw %>% filter(#dano_tot ==0,
+         #fecha_de_siembra_dd_mm  > '2018-09-15', 
+         #fecha_de_siembra_dd_mm  < '2018-12-29',
+         rendimiento_qq_ha>4,
+         soja_1_2 == "Soja 2°") %>% 
+  select(campana, zona, rendimiento_qq_ha) %>% 
+  # rename(`Rinde (qq/ha)` = rinde, `Superficie (ha)` = superficie) %>% 
+  # pivot_longer(-campana, -zona) %>% 
+  group_by(campana, zona) %>% 
+  summarise(rinde_top20 = quantile(rendimiento_qq_ha, 0.8)) -> top20
+
+raw %>% filter(#dano_tot ==0,
+         #fecha_de_siembra_dd_mm > '2018-09-15', 
+         #fecha_de_siembra_dd_mm < '2018-12-29',
+         rendimiento_qq_ha>4,
+         soja_1_2 == "Soja 2°") %>% 
+  left_join(top20, by = c("campana", "zona")) %>% 
+  mutate(top20 = if_else(rendimiento_qq_ha >= rinde_top20, "si", "no")) -> soja2_80
+  
+```
+
+
+```{r}
+soja2_80 %>% 
+  select(campana, zona, rendimiento_qq_ha) %>% 
+  group_by(campana, zona) %>% 
+  summarise(rinde = round(median(rendimiento_qq_ha, na.rm = T),0)) -> mu
+
+soja2_80 %>%
+  ggplot(aes(rendimiento_qq_ha))+
+  geom_histogram(fill = "steelblue")+
+  # geom_histogram(aes(fill = top20))+
+  facet_grid(campana~zona, scales = "free_y")+
+  geom_vline(data=mu, aes(xintercept=rinde), linetype="dashed", col = "red")+
+  labs(x = "Rendimiento (qq/ha)", y = "Nro. de lotes", 
+       title = "Distribución de rindes de soja 2° x campaña / zona", 
+       subtitle = 'Linea roja indica 50%')+ 
+  theme_aapre
+```
+
+```{r}
+ggsave(last_plot(), 
+       file = "plots/rend_cam_zon_soj2.png", 
+       width = 7, height = 4)
+```
+
+---------
+
+```{r}
+soja2_80 %>% 
+  filter(top20 == "si") %>%
+  drop_na(antecesor) %>% 
+  janitor::tabyl(antecesor, GM, sort = TRUE) %>%
+  janitor::adorn_totals(c("row", "col")) %>%
+  #janitor::adorn_percentages(c("row")) %>% 
+  janitor::adorn_percentages(c("col")) %>%
+  mutate(across(is.numeric, round, 2))
+soja2_80 %>% 
+  filter(top20 == "no") %>%
+  drop_na(antecesor) %>% 
+  janitor::tabyl(antecesor, GM, sort = TRUE) %>%
+  janitor::adorn_totals(c("row", "col")) %>%
+  janitor::adorn_percentages(c("col")) %>% 
+  mutate(across(is.numeric, round, 2))
+
+```
+
+
+
 # Rendimientos
 
 ```{r message=FALSE, warning=FALSE}
