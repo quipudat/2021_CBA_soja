@@ -143,7 +143,7 @@ potencial_ambiente %>%
 ```
 
 ```{r}
-ggsave(last_plot(), file = "plots_cultivares/potencial_ambiente.png", w=5, h=4)
+ggsave(last_plot(), file = "plots/pot_cam_zon.png", w=5, h=4)
 ```
 
 

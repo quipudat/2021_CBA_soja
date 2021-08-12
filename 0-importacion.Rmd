@@ -25,6 +25,13 @@ raw <- read_sheet(sheet_2017_2021_cba_soja,
 raw %>% glimpse
 ```
 
+#Character to mayus
+```{r}
+
+raw <- raw %>%
+  mutate_if(is.character, str_to_upper)
+
+```
 
 
 ```{r, eval=FALSE}
