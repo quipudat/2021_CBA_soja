@@ -1,3 +1,31 @@
+# GM soja - Pie chart
+```{r}
+raw_sum2 <- raw %>% 
+  group_by(zona, soja_1_2, gm) %>%
+  summarise(#var_lotes= n(), 
+    var_sup = sum(superficie_ha, na.rm = TRUE),
+    rinde_medio = median(rendimiento_qq_ha, na.rm = TRUE), 
+    .groups = 'drop') %>% 
+  mutate_if(is.character, as.factor) %>% 
+  drop_na() %>% 
+  group_by(zona, soja_1_2) %>% 
+  mutate(porcent=var_sup/sum(var_sup)*100)
+
+raw_sum2 %>% #data.frame
+  ggplot(aes(x =factor(1), y = porcent, fill = gm)) +
+  geom_bar(stat='identity') +
+  coord_polar(theta = "y")+
+  facet_grid(soja_1_2 ~ zona, switch = "y")+
+  theme_void()+
+  geom_text(aes( label=paste0(round(porcent), "\n",gm)), 
+            position=position_stack(vjust=0.5), color="white",size=3, fontface ="bold")+
+  theme(legend.position="bottom")+
+  scale_fill_viridis_d(direction = -1)
+
+ggsave(last_plot(), file = "plots/gm_zon.png", width = 7, height = 4)
+```
+
+
 # Variedades
 
 ```{r message=FALSE, warning=FALSE}
