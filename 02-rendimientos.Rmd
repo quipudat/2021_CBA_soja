@@ -107,27 +107,44 @@ ggsave(last_plot(),
        width = 7, height = 4)
 ```
 
----------
 
+
+# Rendimiento potencial por zona de cada campaña
 ```{r}
-soja2_80 %>% 
-  filter(top20 == "si") %>%
-  drop_na(antecesor) %>% 
-  janitor::tabyl(antecesor, GM, sort = TRUE) %>%
-  janitor::adorn_totals(c("row", "col")) %>%
-  #janitor::adorn_percentages(c("row")) %>% 
-  janitor::adorn_percentages(c("col")) %>%
-  mutate(across(is.numeric, round, 2))
-soja2_80 %>% 
-  filter(top20 == "no") %>%
-  drop_na(antecesor) %>% 
-  janitor::tabyl(antecesor, GM, sort = TRUE) %>%
-  janitor::adorn_totals(c("row", "col")) %>%
-  janitor::adorn_percentages(c("col")) %>% 
-  mutate(across(is.numeric, round, 2))
-
+potencial_ambiente <- 
+  raw %>% 
+  filter(#dano_tot == 0, 
+         rendimiento_qq_ha > 4, 
+         riego == "NO") %>% 
+  group_by(campana, zona, soja_1_2) %>%
+  summarise(rinde_50 = median(rendimiento_qq_ha, na.rm = TRUE),
+            rinde_95 = quantile(rendimiento_qq_ha, 
+                                0.95, na.rm = TRUE),
+            .groups = 'drop') 
 ```
 
+```{r}
+potencial_ambiente %>%
+  #mutate(soja_1_2 = recode(soja_1_2, 
+  #                        'soja_1'= 'Soja 1°',
+  #                        'soja_2'= 'Soja 2°')) %>% 
+  ggplot(aes(zona, rinde_95, fill = soja_1_2)) + 
+  geom_bar(
+    position = "identity",
+    stat = "identity",
+    alpha = .5)+
+  facet_grid(. ~ campana)+
+  # theme(axis.text.x = element_text(angle = 60, hjust = 1))+
+  theme_bw()+
+  labs(x = "Zona agroecológica", y = "qq/ha",
+       title = "Potencial de rendimiento\n(95 percentil)", 
+       fill = "")+
+  theme_dens1
+```
+
+```{r}
+ggsave(last_plot(), file = "plots_cultivares/potencial_ambiente.png", w=5, h=4)
+```
 
 
 # Rendimientos
