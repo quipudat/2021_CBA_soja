@@ -17,6 +17,44 @@ load(here::here("data/data.Rdata"))
 # glimpse(dat)
 ```
 
+
+
+# Fechas de siembra por campaña - soja 1º
+
+```{r}
+soja_raw <-
+  soja_raw %>% janitor::clean_names()
+```
+
+```{r}
+
+#cow <- soja_raw %>% 
+  #janitor::clean_names() %>%
+  #mutate (fecha_de_siembra_dd_mm = lubridate::month(fecha_de_siembra_dd_mm)) %>%
+  #mutate (echa_de_siembra_dd_mm = as.Date(fecha_de_siembra_dd_mm
+  #                      , format = "%m.%d")
+  #        , zona = as.factor(zona)
+  #        ) %>%
+  
+  filter(#fecha_siembra > '2018-09-15', 
+         #fecha_siembra < '2018-12-31', 
+         soja_1_2 == "Soja 1°") %>%
+  ggplot(aes(x = FDS, y = zona)) +
+  geom_density_ridges(aes( stat ="density"
+                           ,fill = campana
+                           ), 
+                      alpha =0.5,
+                      jittered_points = TRUE, scale = .7, rel_min_height = .01,
+                      point_shape = "|", point_size = 1, size = 0.25,
+                      position = position_points_jitter(height = 0))+
+  scale_x_date(date_labels = "%^b", breaks = date_breaks("1 months"), expand = c(0,0))+
+  labs(x= "", y = "Zona", 
+       title = "Evolución inter-anual de\nventanas de siembra - Soja 1°" ,
+       fill = "")+
+  theme_dens
+```
+
+
 ```{r}
 list.files(path = here::here("plots_manejo"), 
            pattern = ".png",
