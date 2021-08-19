@@ -4,6 +4,31 @@ output:
     code_folding: hide
     chunk_output_type: console
 ---
+# Dosis de S por zona (4 campañas)
+```{r}
+raw %>%
+  mutate_if(is.character, str_to_upper) %>%
+  filter(azufre_kg_ha < 20,
+         azufre_kg_ha > 0
+  ) %>%
+  
+  ggplot(aes(azufre_kg_ha))+
+  geom_histogram(fill = "steelblue")+
+  facet_grid(zona~.) +
+  # geom_vline(data=mu, aes(xintercept=rinde), linetype="dashed", col = "red")+
+  labs(x = "Dosis de azufre (kg/ha)", y = "Nro. de lotes",
+       title = 'Dosis de azufre por zona')+ 
+  theme_bw(base_size = 12)
+```
+
+```{r}
+ggsave(last_plot(), file = "plots/S_zon.png", width = 5, height = 6)
+```
+
+
+
+
+
 
 # Manejo 
 
