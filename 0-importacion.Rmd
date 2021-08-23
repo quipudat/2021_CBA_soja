@@ -27,26 +27,24 @@ raw %>% glimpse
 
 #Character to mayus
 ```{r}
-
 raw <- raw %>%
   mutate_if(is.character, str_to_upper)
-
 ```
 
 
 ```{r, eval=FALSE}
 raw %>% glimpse()
 raw %>% 
-  mutate(across(c("localidad", "variedad", "cultivo_de_cosecha","antecesor_estival","fungicida1", "fungicida2", 
-                  "enfermedad_1", "enfermedad_2"), 
-                #sacar acentos
-                ~stringi::stri_trans_general(
-                #pasar a mayusculas y sacar puntos
-                str_to_upper(gsub(',', '\\.', 
-                # sacar espacios antes-desp
-                str_trim(
-                  str_replace_all(., fixed(" "), "_")
-                ))), "Latin-ASCII"))) %>% 
+  mutate_if(is.character, 
+    # across(c("localidad", "variedad", "cultivo_de_cosecha","antecesor_estival","fungicida1", "fungicida2", "enfermedad_1", "enfermedad_2"), 
+           list(
+             #sacar acentos
+             ~stringi::stri_trans_general(
+             #pasar a mayusculas y sacar puntos
+             str_to_upper(gsub(',', '\\.', 
+             # sacar espacios antes-desp
+             str_trim(str_replace_all(., fixed(" "), "_")))), "Latin-ASCII"))
+    )%>% 
   # mutate(Zona = case_when(
   #   str_detect(zona_0, "Madariaga|Maipú") ~ "Madariaga", 
   #   str_detect(zona_0, "Balcarce") ~ "Sierra", 
@@ -60,9 +58,9 @@ raw %>%
   #   date>as.Date("0001-07-15") ~ "Tardio")) %>% 
   # rowwise() %>%
   # mutate(dano_tot = sum(dano_1,dano_2, na.rm = T)) %>% 
- mutate_at(vars(
-   localidad, variedad,calidad_del_lote, cultivo_de_cosecha, antecesor_estival,fungicida1, fungicida2, enfermedad_1, enfermedad_2), as.factor) %>% 
-  ungroup-> dat  
+ # mutate_at(vars(
+ #   localidad, variedad,calidad_del_lote, cultivo_de_cosecha, antecesor_estival,fungicida1, fungicida2, enfermedad_1, enfermedad_2), as.factor) %>% 
+  ungroup -> dat  
 
 glimpse(dat)
 # raw %>% 
