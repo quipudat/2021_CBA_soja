@@ -15,28 +15,30 @@ googledrive::drive_auth(email = "quipu.dat@gmail.com")
 
 ## Soja
 
+Conectar planilla
 ```{r}
 sheet_2017_2021_cba_soja <- gs4_get(gs4_find("2017-2021_cba_soja")$id)
+# sheet_2017_2021_cba_soja %>% gs4_browse()
+```
 
+Importar hoja de datos
+```{r}
 raw <- read_sheet(sheet_2017_2021_cba_soja, 
                   sheet = "raw", guess_max = 10000, skip=0) %>% 
-  janitor::clean_names() #%>% 
+  janitor::clean_names() #%>%
+```
 
+```{r}
 raw %>% glimpse
 ```
 
-#Character to mayus
-```{r}
-raw <- raw %>%
-  mutate_if(is.character, str_to_upper)
-```
+# raw to dat
 
+codificar a la nomenclatura de los scripts
 
 ```{r, eval=FALSE}
-raw %>% glimpse()
 raw %>% 
   mutate_if(is.character, 
-    # across(c("localidad", "variedad", "cultivo_de_cosecha","antecesor_estival","fungicida1", "fungicida2", "enfermedad_1", "enfermedad_2"), 
            list(
              #sacar acentos
              ~stringi::stri_trans_general(
@@ -45,6 +47,10 @@ raw %>%
              # sacar espacios antes-desp
              str_trim(str_replace_all(., fixed(" "), "_")))), "Latin-ASCII"))
     )%>% 
+ rename(
+   #aca debemos convertir los nombres de las col para nuestro coding
+   geno_raw = variedad
+   ) %>% 
   # mutate(Zona = case_when(
   #   str_detect(zona_0, "Madariaga|Maipú") ~ "Madariaga", 
   #   str_detect(zona_0, "Balcarce") ~ "Sierra", 
@@ -60,18 +66,46 @@ raw %>%
   # mutate(dano_tot = sum(dano_1,dano_2, na.rm = T)) %>% 
  # mutate_at(vars(
  #   localidad, variedad,calidad_del_lote, cultivo_de_cosecha, antecesor_estival,fungicida1, fungicida2, enfermedad_1, enfermedad_2), as.factor) %>% 
-  ungroup -> dat  
+ungroup -> dat
+```
 
-glimpse(dat)
-# raw %>% 
-#   slice(292:295) %>% 
-#   select(contains("dano"))
-# save(raw,dat, file = "data/data.Rdata")
+Generar un script exclusivo de genotipos
+
+```{r, eval=FALSE}
+source(here::here("geno_new.R"))
+geno1 %>% drop_na(geno_new) 
+
+dat_geno  <- dat %>% 
+  filter(!geno_raw %in% (geno1 %>% filter(geno_new=="borrar") %>% pull(geno_raw)))  %>% 
+  drop_na(geno_raw) %>%  
+  drop_na(gm) 
+
+dat_geno <- geno1 %>% 
+  drop_na(geno_new) %>%
+  filter(!geno_new=="borrar") %>%
+  full_join(dat_geno, by = c("geno_raw")) %>%
+  mutate(geno=coalesce(geno_new, geno_raw)) %>% 
+  mutate(geno= str_replace(geno, "_IPRO|_IRPO|_STS|STS", ""))
+```
+
+Crear una hoja para mostrar como fue depurado
+
+```{r}
+dat_geno %>% 
+  # drop_na(geno) %>%   
+  # filter(!geno %in% (geno1 %>% filter(geno_new=="borrar") %>% pull(geno_raw))) %>%
+  count(gm, geno)%>% 
+  write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "geno_clean")
+```
+
+
+```{r, eval=FALSE}
+save(raw, dat, dat_geno, file = "data/data.Rdata")
 ```
 
 
 ```{r eval = F}
-save(raw, fos, dat, file = "data/data.Rdata")
+glimpse(dat)
 ```
 
 ```{r eval = F}
