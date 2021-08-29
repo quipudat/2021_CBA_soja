@@ -1,0 +1,147 @@
+
+```{r message=FALSE, warning=FALSE, eval=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+pacman::p_load(tidyverse, googlesheets4, googledrive)
+gs4_auth(email = "quipu.dat@gmail.com")
+googledrive::drive_auth(email = "quipu.dat@gmail.com")
+```
+
+```{r}
+load(here::here("data/data.Rdata"))
+```
+
+Como ingresaron los nombres en la planilla raw?
+
+```{r}
+# dat %>% 
+#   select(especie_principal, especie_secundaria) %>% 
+#   pivot_longer(cols= c("especie_principal", "especie_secundaria"),
+#                names_to = "especie_nivel", 
+#                values_to = "maleza_raw") %>% 
+#   drop_na(maleza_raw) %>% 
+#   count(maleza_raw) %>%  
+#   mutate(new=NA) %>% 
+#   arrange(maleza_raw) %>% 
+#   select(n, everything()) %>% 
+#   write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "weeds_raw")
+```
+
+Modificar manualmente la columna malezas_new de la hoja weeds_raw, luego importar
+
+```{r}
+weed1 <- read_sheet(sheet_2017_2021_cba_soja, sheet = "weeds_raw") %>% 
+  drop_na(maleza_new) %>% 
+  select(-n)
+```
+
+pasar dat wide a weed_long solo con lotes de soja de 1º  
+
+```{r, eval=FALSE}
+dat %>% 
+  filter(soja_1_2 == "SOJA_1°") %>%  
+  select(campana, zona, especie_principal, especie_secundaria) %>% 
+  pivot_longer(-(campana:zona), names_to = "nivel", 
+               values_to = "maleza_raw") -> weed_long
+```
+
+Matchear las malezas_raw asi se apendizan los nuevos nombres
+
+```{r}
+weed_long %>% 
+  left_join(weed1, by = c("maleza_raw")) %>% 
+  mutate(maleza=coalesce(maleza_new, maleza_raw)) %>% 
+  drop_na(campana, zona, nivel) -> dat_weed
+```
+
+```{r}
+dat_weed %>% 
+  drop_na(maleza) %>% 
+  count(campana, zona, nivel, maleza)%>% 
+  group_by(campana, zona, nivel) %>% 
+  mutate(porcent=n/sum(n)*100) %>%  
+  select(-n) %>% 
+  pivot_wider(values_from = porcent, 
+              names_from = campana,
+              values_fill = 0) %>% 
+  mutate(zona=factor(zona)) %>% 
+  mutate(media_periodo = rowMeans(across(where(is.numeric)))) %>% 
+  mutate_if(is.numeric, round,1) -> weed_table
+```
+
+```{r}
+weed_table %>% 
+  ungroup() %>% 
+  distinct(maleza) %>% 
+  arrange(maleza) %>% 
+  write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "weeds_clean")
+```
+
+zona 1
+
+```{r}
+weed_table %>% 
+  filter(zona=="1") %>% 
+  group_by(nivel) %>%
+  top_n(5, media_periodo) %>% 
+  arrange(nivel, -media_periodo) %>% 
+  formattable(align = "r",
+              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
+                   area(col = 4:7) ~ color_bar("#B1CBEB")))
+```
+
+zona 2
+
+```{r}
+weed_table %>% 
+  filter(zona=="2") %>% 
+  group_by(nivel) %>%
+  top_n(5, media_periodo) %>% 
+  arrange(nivel, -media_periodo) %>% 
+  formattable(align = "r",
+              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
+                   area(col = 4:7) ~ color_bar("#B1CBEB")))
+```
+
+zona 3
+
+```{r}
+weed_table %>% 
+  filter(zona=="3") %>% 
+  group_by(nivel) %>%
+  top_n(5, media_periodo) %>% 
+  arrange(nivel, -media_periodo) %>% 
+  formattable(align = "r",
+              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
+                   area(col = 4:7) ~ color_bar("#B1CBEB")))
+```
+
+zona 4
+
+```{r}
+weed_table %>% 
+  filter(zona=="4") %>% 
+  group_by(nivel) %>%
+  top_n(5, media_periodo) %>% 
+  arrange(nivel, -media_periodo) %>% 
+  formattable(align = "r",
+              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
+                   area(col = 4:7) ~ color_bar("#B1CBEB")))
+```
+
+zona 5
+
+```{r}
+weed_table %>% 
+  filter(zona=="5") %>% 
+  group_by(nivel) %>%
+  top_n(5, media_periodo) %>% 
+  arrange(nivel, -media_periodo) %>% 
+  formattable(align = "r",
+              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
+                   area(col = 4:7) ~ color_bar("#B1CBEB")))
+```

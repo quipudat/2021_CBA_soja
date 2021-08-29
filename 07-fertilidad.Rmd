@@ -3,8 +3,23 @@ output:
   html_document:
     code_folding: hide
     chunk_output_type: console
+editor_options: 
+  chunk_output_type: console
 ---
+
+
+```{r message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+pacman::p_load(tidyverse, lubridate, scales, ggridges)
+# drive_auth(email = "edwardsmolina@gmail.com")
+# gs4_auth(email = "edwardsmolina@gmail.com")
+source(here::here("0-themes.R"))
+load(here::here("data/data.Rdata"))
+glimpse(dat)
+```
+
 # Dosis de S por zona (4 campañas)
+
 ```{r}
 raw %>%
   mutate_if(is.character, str_to_upper) %>%
@@ -25,28 +40,87 @@ raw %>%
 ggsave(last_plot(), file = "plots/S_zon.png", width = 5, height = 6)
 ```
 
-
-
-
-
-
-# Manejo 
-
-```{r message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
-pacman::p_load(tidyverse, lubridate, scales, ggridges)
-# drive_auth(email = "edwardsmolina@gmail.com")
-# gs4_auth(email = "edwardsmolina@gmail.com")
-source(here::here("0 themes.R"))
-load(here::here("data/data.Rdata"))
-# glimpse(dat)
-```
-
+# Fosforo 
 
 ```{r }
 library(ggstance)
 library(patchwork)
 ```
+
+## P Bray
+
+```{r}
+dat %>%
+  # mutate_if(is.character, str_to_upper) %>%
+  filter(between(fosforo_ppm,0, 50)) %>%
+  ggplot(aes(fosforo_ppm))+
+  geom_histogram(fill = "steelblue")+
+  facet_grid(zona~.) +
+  # geom_vline(data=mu, aes(xintercept=rinde), linetype="dashed", col = "red")+
+  labs(x = "P bray (ppm)", y = "Nro. de lotes",
+       title = 'P bray')+ 
+  stat_summaryh(fun.x=median,
+                geom="vline",
+                aes(xintercept=..x.., y=0),
+                size=.51, colour="red") +
+  stat_summaryh(fun.x=median,
+                geom="text",
+                aes(y=40, label=..x.. %>% round(1)),
+                size=3, colour="red", angle=90, vjust=-.5) +
+  theme_bw(base_size = 12)
+```
+
+```{r}
+ggsave(last_plot(), file = "07-fertilidad/Pbray_zona.png", width = 5, height = 6)
+```
+
+## P total
+
+```{r}
+dat %>%
+  # mutate_if(is.character, str_to_upper) %>%
+  filter(between(dosis_p_total,0, 30)) %>%
+  ggplot(aes(dosis_p_total))+
+  geom_histogram(fill = "steelblue")+
+  facet_grid(zona~.) +
+  # geom_vline(data=mu, aes(xintercept=rinde), linetype="dashed", col = "red")+
+  labs(x = "P total (kg/ha)", y = "Nro. de lotes",
+       title = '')+ 
+  stat_summaryh(fun.x=median,
+                geom="vline",
+                aes(xintercept=..x.., y=0),
+                size=.51, colour="red") +
+  stat_summaryh(fun.x=median,
+                geom="text",
+                aes(y=1000, label=..x..),
+                size=3, colour="red", angle=90, vjust=-.5) +
+  theme_bw(base_size = 12)
+```
+
+```{r}
+ggsave(last_plot(), file = "07-fertilidad/Pbray_zona.png", width = 5, height = 6)
+```
+
+## Balance P
+
+```{r}
+dat$balance_de_p
+dat$rendimiento_qq_ha
+dat %>% 
+  # drop_na(p_bray_ppm) %>% 
+  ggplot(aes(rendimiento_qq_ha, balance_de_p))+ 
+  geom_point(alpha=.2)+
+  labs( x = "Rendimiento (qq/ha)", 
+       y = "Balance fósforo (kg/ha)",
+       col = "Fertilizante")+
+  geom_hline(yintercept = 0)+
+  # coord_fixed(ratio = 1 / 1)+
+  theme_bw(base_size = 12)
+
+```
+  
+ggsave(last_plot(), file = "plots_manejo2/balance_fosforo.png")
+
 
 ```{r }
 fos %>% 
@@ -85,11 +159,11 @@ fos %>%
   theme(axis.text.y=element_blank(),
         axis.ticks.y=element_blank())
 
-ggsave(last_plot(), filename="plots_ferti/fosforo1.png", 
-       w=5, h=3.5)
-drive_upload(here::here("plots_ferti", "fosforo1.png"),
-             path = as_dribble("juanchi_guille/tandilia_fina_2020/ferti_plots"),
-             overwrite = TRUE)
+# ggsave(last_plot(), filename="plots_ferti/fosforo1.png", 
+#        w=5, h=3.5)
+# drive_upload(here::here("plots_ferti", "fosforo1.png"),
+#              path = as_dribble("juanchi_guille/tandilia_fina_2020/ferti_plots"),
+#              overwrite = TRUE)
 ```
 
 
@@ -125,8 +199,6 @@ ggsave(fosf_plot, filename="plots_ferti/fosforo2.png", w=5, h=5)
 ```
 
 
-```{r }
-```
 
 ```{r }
 dat_fs %>%   

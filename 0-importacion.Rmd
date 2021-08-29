@@ -3,6 +3,7 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+
 # Importacion {#import}
 
 
@@ -15,17 +16,19 @@ googledrive::drive_auth(email = "quipu.dat@gmail.com")
 
 ## Soja
 
-Conectar planilla
+Conectar con google sheet
+
 ```{r}
 sheet_2017_2021_cba_soja <- gs4_get(gs4_find("2017-2021_cba_soja")$id)
 # sheet_2017_2021_cba_soja %>% gs4_browse()
 ```
 
-Importar hoja de datos
+Importar hoja de datos (raw)
+
 ```{r}
 raw <- read_sheet(sheet_2017_2021_cba_soja, 
                   sheet = "raw", guess_max = 10000, skip=0) %>% 
-  janitor::clean_names() #%>%
+  janitor::clean_names() 
 ```
 
 ```{r}
@@ -72,8 +75,9 @@ ungroup -> dat
 Generar un script exclusivo de genotipos
 
 ```{r, eval=FALSE}
-source(here::here("geno_new.R"))
-geno1 %>% drop_na(geno_new) 
+geno1 <- read_sheet(sheet_2017_2021_cba_soja, sheet = "geno_raw") %>% 
+  # drop_na(geno_new, gm_new) %>% 
+  select(geno_raw, geno_new)
 
 dat_geno  <- dat %>% 
   filter(!geno_raw %in% (geno1 %>% filter(geno_new=="borrar") %>% pull(geno_raw)))  %>% 
@@ -92,17 +96,20 @@ Crear una hoja para mostrar como fue depurado
 
 ```{r}
 dat_geno %>% 
-  # drop_na(geno) %>%   
-  # filter(!geno %in% (geno1 %>% filter(geno_new=="borrar") %>% pull(geno_raw))) %>%
   count(gm, geno)%>% 
   write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "geno_clean")
 ```
 
-
-```{r, eval=FALSE}
-save(raw, dat, dat_geno, file = "data/data.Rdata")
+```{r}
+cs <- read_sheet(sheet_2017_2021_cba_soja, 
+                  sheet = "CS", guess_max = 10000, skip=0) %>% 
+  janitor::clean_names() 
 ```
 
+```{r, eval=FALSE}
+load(here::here("data/data.Rdata"))
+save(raw, dat, dat_geno, cs, file = "data/data.Rdata")
+```
 
 ```{r eval = F}
 glimpse(dat)

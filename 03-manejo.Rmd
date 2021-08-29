@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
 pacman::p_load(tidyverse, lubridate, scales, ggridges)
 # drive_auth(email = "edwardsmolina@gmail.com")
 # gs4_auth(email = "edwardsmolina@gmail.com")
-source(here::here("0 themes.R"))
+source(here::here("0-themes.R"))
 load(here::here("data/data.Rdata"))
 # glimpse(dat)
 ```
@@ -344,3 +344,35 @@ dat %>%
 ggsave(last_plot(), file = "plots_manejo/antecesores.png", w=5, h=5)
 
 ```
+
+# Cultivo de servicio 
+
+```{r}
+cs
+```
+
+```{r}
+cs %>% 
+  # group_by(campana) %>%
+  # mutate(row = row_number()) %>%
+  ggplot() +
+  aes(x=rto_barbecho, y=rto_cultivo_de_servicio-rto_barbecho)+
+  facet_grid(~ campana, scales = "free")+
+  # facet_grid(~ campana, ncol=4, scales = "free")+
+  geom_point(alpha=.3)+
+  # geom_smooth(se = F, method = 'lm', formula = y ~ poly(x, 1)) +
+  geom_smooth(se = F, span=.8, col ="black")+
+  geom_hline(yintercept=0)+
+  labs(x= "Rinde barbecho (qq/ha)", y = "Dif rinde CS - Barb (qq/ha)")+
+  ylim(-20,20)+
+  xlim(10,50)+
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0),
+            alpha = .002, fill = "blue") +
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 0, ymax = Inf),
+            alpha = .002, fill = "red")+ 
+  expand_limits(x = 0, y = 0)+
+  theme_minimal()
+  
+ggsave(last_plot(), file = "03-manejo/cs_bar_campana.png", w=7, h=2.5)
+```
+
