@@ -1,7 +1,7 @@
 
 ```{r message=FALSE, warning=FALSE, eval=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-pacman::p_load(tidyverse, googlesheets4, googledrive)
+pacman::p_load(tidyverse, googlesheets4, googledrive, )
 gs4_auth(email = "quipu.dat@gmail.com")
 googledrive::drive_auth(email = "quipu.dat@gmail.com")
 ```
