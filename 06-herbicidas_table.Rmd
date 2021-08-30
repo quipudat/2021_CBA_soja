@@ -1,9 +1,12 @@
 
 ```{r message=FALSE, warning=FALSE, eval=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-pacman::p_load(tidyverse, googlesheets4, googledrive)
+pacman::p_load(tidyverse, googlesheets4, googledrive, formattable)
+
 gs4_auth(email = "quipu.dat@gmail.com")
 googledrive::drive_auth(email = "quipu.dat@gmail.com")
+sheet_2017_2021_cba_soja <- gs4_get(gs4_find("2017-2021_cba_soja")$id)
+
 ```
 
 ```{r}
@@ -13,135 +16,119 @@ load(here::here("data/data.Rdata"))
 Como ingresaron los nombres en la planilla raw?
 
 ```{r}
-dat %>%
-  select(matches("herbicida_")) %>%
-  pivot_longer(cols= everything(),
-               names_to = "tipo",
-               values_to = "herbicida_raw") %>%
-  drop_na(herbicida_raw) %>%
-  count(herbicida_raw) %>%
-  mutate(new=NA) %>%
-  arrange(herbicida_raw) %>%
-  select(n, everything()) %>%
-  write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "herbicidas_raw")
+# dat %>%
+#   select(matches("herbicida_")) %>%
+#   pivot_longer(cols= everything(),
+#                names_to = "tipo",
+#                values_to = "herbicida_raw") %>%
+#   drop_na(herbicida_raw) %>%
+#   count(herbicida_raw) %>%
+#   mutate(new=NA) %>%
+#   arrange(herbicida_raw) %>%
+#   select(n, everything()) %>%
+#   write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "herbicidas_raw")
 ```
 
 Modificar manualmente la columna malezas_new de la hoja weeds_raw, luego importar
 
 ```{r}
-weed1 <- read_sheet(sheet_2017_2021_cba_soja, sheet = "weeds_raw") %>% 
-  drop_na(maleza_new) %>% 
+herbi1 <- read_sheet(sheet_2017_2021_cba_soja, sheet = "herbicidas_raw") %>% 
+  drop_na(new) %>% 
   select(-n)
+
+herbi1 
 ```
 
-pasar dat wide a weed_long solo con lotes de soja de 1º  
+pasar dat wide a weed_long solo con lotes de soja de 1º  y 2º
 
 ```{r, eval=FALSE}
 dat %>% 
-  filter(soja_1_2 == "SOJA_1°") %>%  
-  select(campana, zona, especie_principal, especie_secundaria) %>% 
-  pivot_longer(-(campana:zona), names_to = "nivel", 
-               values_to = "maleza_raw") -> weed_long
+  # filter(soja_1_2 == "SOJA_1°") %>%  
+  select(campana, soja_1_2, matches("herbicida_")) %>% 
+  pivot_longer(-(campana:soja_1_2), 
+               names_to = "momento", 
+               values_to = "herbicida_raw") -> herbi_long
 ```
+
+```{r}
+herbi_long %>% 
+  drop_na(herbicida_raw, soja_1_2) %>% 
+  count(campana, soja_1_2, momento) %>% 
+  arrange(momento, soja_1_2, campana) %>% 
+  print(n=Inf)
+```
+
 
 Matchear las malezas_raw asi se apendizan los nuevos nombres
 
 ```{r}
-weed_long %>% 
-  left_join(weed1, by = c("maleza_raw")) %>% 
-  mutate(maleza=coalesce(maleza_new, maleza_raw)) %>% 
-  drop_na(campana, zona, nivel) -> dat_weed
+df <- data.frame(herbi_long %>% ungroup() %>% distinct(momento),
+                 momento_new = c("residual_barbecho_corto_primaveral", 
+                                 "residual_pre_siembra_pre_emergente", 
+                                 "postemergente", "postemergente"))
 ```
 
 ```{r}
-dat_weed %>% 
-  drop_na(maleza) %>% 
-  count(campana, zona, nivel, maleza)%>% 
-  group_by(campana, zona, nivel) %>% 
+herbi_long %>% 
+  inner_join(herbi1, by = c("herbicida_raw")) %>% 
+  mutate(herbicida=coalesce(new, herbicida_raw)) %>%  
+  select(-new, -herbicida_raw) %>% 
+
+  inner_join(df, by = c("momento")) %>% 
+  mutate(momento=coalesce(momento_new, momento)) %>%  
+  select(-momento_new) %>% 
+  
+  drop_na(campana, momento) -> dat_herbi
+```
+
+
+```{r}
+dat_herbi %>% 
+  filter(!herbicida %in% c("eliminar", "SINDATO")) %>% 
+  drop_na(herbicida, soja_1_2) %>% 
+  count(campana, soja_1_2, momento, herbicida) %>%
+  mutate(herbicida = str_replace_all(herbicida, "_", "")) %>% 
+  group_by(campana,  soja_1_2, momento) %>%
   mutate(porcent=n/sum(n)*100) %>%  
-  select(-n) %>% 
+  select(-n) %>%
   pivot_wider(values_from = porcent, 
               names_from = campana,
-              values_fill = 0) %>% 
-  mutate(zona=factor(zona)) %>% 
+              values_fill = list(porcent = 0)) %>% 
   mutate(media_periodo = rowMeans(across(where(is.numeric)))) %>% 
-  mutate_if(is.numeric, round,1) -> weed_table
+  mutate_if(is.numeric, round,1) -> herbi_table
 ```
 
+Como quedaron los nombres?
+
 ```{r}
-weed_table %>% 
+herbi_table %>% 
   ungroup() %>% 
-  distinct(maleza) %>% 
-  arrange(maleza) %>% 
-  write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "weeds_clean")
+  count(herbicida) %>% 
+  arrange(herbicida) %>% 
+  write_sheet(ss=sheet_2017_2021_cba_soja, sheet = "herbi_clean")
 ```
 
-zona 1
+```{r}
+save(herbi_table, file="data/data_tables.RData")
+load("data/data_tables.RData")
+```
 
 ```{r}
-weed_table %>% 
-  filter(zona=="1") %>% 
-  group_by(nivel) %>%
+herbi_table %>% ungroup() %>% distinct(momento)
+```
+
+<ir cambiando el grupo> - <Soja 1 o 2>
+
+```{r}
+herbi_table %>% 
+  ungroup() %>% 
+  filter(soja_1_2=="SOJA_1°") %>%
+  filter(momento=="residual_pre_siembra_pre_emergente") %>%
   top_n(5, media_periodo) %>% 
-  arrange(nivel, -media_periodo) %>% 
+  arrange(soja_1_2, -media_periodo) %>% 
   formattable(align = "r",
-              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
-                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
+              list(herbicida=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                   area(col = 4:7) ~ function(x) percent(x/100, digits = 1),
                    area(col = 4:7) ~ color_bar("#B1CBEB")))
 ```
 
-zona 2
-
-```{r}
-weed_table %>% 
-  filter(zona=="2") %>% 
-  group_by(nivel) %>%
-  top_n(5, media_periodo) %>% 
-  arrange(nivel, -media_periodo) %>% 
-  formattable(align = "r",
-              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
-                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
-                   area(col = 4:7) ~ color_bar("#B1CBEB")))
-```
-
-zona 3
-
-```{r}
-weed_table %>% 
-  filter(zona=="3") %>% 
-  group_by(nivel) %>%
-  top_n(5, media_periodo) %>% 
-  arrange(nivel, -media_periodo) %>% 
-  formattable(align = "r",
-              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
-                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
-                   area(col = 4:7) ~ color_bar("#B1CBEB")))
-```
-
-zona 4
-
-```{r}
-weed_table %>% 
-  filter(zona=="4") %>% 
-  group_by(nivel) %>%
-  top_n(5, media_periodo) %>% 
-  arrange(nivel, -media_periodo) %>% 
-  formattable(align = "r",
-              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
-                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
-                   area(col = 4:7) ~ color_bar("#B1CBEB")))
-```
-
-zona 5
-
-```{r}
-weed_table %>% 
-  filter(zona=="5") %>% 
-  group_by(nivel) %>%
-  top_n(5, media_periodo) %>% 
-  arrange(nivel, -media_periodo) %>% 
-  formattable(align = "r",
-              list(maleza=formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
-                   area(col = 4:7) ~ function(x) percent(x / 100, digits = 1),
-                   area(col = 4:7) ~ color_bar("#B1CBEB")))
-```
